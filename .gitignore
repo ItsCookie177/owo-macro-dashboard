@@ -1,0 +1,9 @@
+node_modules/
+dist/
+config.json
+npm-install.log
+*.log
+prd.md
+architecture.md
+design.md
+implementation-plan.md
