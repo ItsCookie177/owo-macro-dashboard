@@ -12,6 +12,7 @@ Web dashboard + server di Termux yang mengendalikan Discord lewat UI automation
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev)
 [![Vitest](https://img.shields.io/badge/test-Vitest-6E9F18?logo=vitest&logoColor=white)](https://vitest.dev)
 [![Platform](https://img.shields.io/badge/platform-Android%20%7C%20Termux-A4C639?logo=android&logoColor=white)](https://termux.dev)
+[![License](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
 
 </div>
 
@@ -28,6 +29,7 @@ Web dashboard + server di Termux yang mengendalikan Discord lewat UI automation
 - [Troubleshooting](#troubleshooting)
 - [Pengembangan](#pengembangan)
 - [Struktur Proyek](#struktur-proyek)
+- [Lisensi](#lisensi)
 
 ---
 
@@ -241,6 +243,13 @@ makro/
 ├── index.html
 └── config.json         # dibuat otomatis — jangan di-commit (ada token)
 ```
+
+---
+
+## Lisensi
+
+Proyek ini berlisensi [MIT](LICENSE) — bebas dipakai, dimodifikasi, dan
+dibagikan, asal atribut lisensi tetap ikut.
 
 ---
 
