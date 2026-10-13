@@ -1,143 +1,251 @@
+<div align="center">
+
 # OwO Hunt Macro Dashboard
 
-Dashboard web untuk menjalankan command OwO Bot (`owo hunt`, `owo battle`,
-`owo coinflip`, `owo slots`) otomatis di Discord Android lewat **UI automation**
-(ADB / Shizuku) — tanpa token Discord, tanpa self-bot API. Server jalan di
-Termux, diakses dari HP atau PC di Wi-Fi yang sama.
+**Macro command OwO Bot di Discord Android — otomatis, terjadwal, tanpa token.**
+
+Web dashboard + server di Termux yang mengendalikan Discord lewat UI automation
+(ADB / Shizuku). Bukan self-bot API — murni simulasi ketik di layar.
+
+[![Node](https://img.shields.io/badge/Node.js-%3E%3D20-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
+[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev)
+[![Vitest](https://img.shields.io/badge/test-Vitest-6E9F18?logo=vitest&logoColor=white)](https://vitest.dev)
+[![Platform](https://img.shields.io/badge/platform-Android%20%7C%20Termux-A4C639?logo=android&logoColor=white)](https://termux.dev)
+
+</div>
+
+---
+
+## Daftar Isi
+
+- [Fitur](#fitur)
+- [Cara Kerja](#cara-kerja)
+- [Mulai Cepat](#mulai-cepat)
+- [Penggunaan](#penggunaan)
+- [Konfigurasi](#konfigurasi)
+- [Diagnostik](#diagnostik)
+- [Troubleshooting](#troubleshooting)
+- [Pengembangan](#pengembangan)
+- [Struktur Proyek](#struktur-proyek)
+
+---
 
 ## Fitur
 
-- Rotasi command otomatis dengan interval custom (default 30 dtk) + jitter
-- Batas per command type (mis. coinflip/slots max 20× per sesi)
-- Sesi foreground singkat, auto-stop: fokus pindah dari Discord (anti salah
-  ketik), gagal 3× berturut, atau lewat batas waktu
-- Adapter auto-detect: Shizuku → ADB → mock (untuk demo/test)
-- Dashboard real-time: statistik, countdown, log stream (SSE), probe diagnostik
-- Akses LAN pakai token (localhost gratis, device lain wajib token)
+| | |
+| --- | --- |
+| ✅ **Rotasi otomatis** | `owo hunt` → `battle` → `coinflip` → `slots`… interval custom + jitter anti-pattern |
+| ✅ **Batas per command** | Mis. coinflip/slots dibatasi 20× per sesi — hunt/battle bebas |
+| ✅ **Anti salah ketik** | Auto-stop saat focus pindah dari Discord; teks tidak pernah nyasar ke app lain |
+| ✅ **Multi mode layar** | Fullscreen, split-screen, atau browser floating window di atas Discord |
+| ✅ **Adapter otomatis** | Deteksi Shizuku → fallback ADB → mock (untuk demo tanpa device) |
+| ✅ **Dashboard real-time** | Statistik, countdown, log stream (SSE), tombol probe diagnostik |
+| ✅ **Akses HP + PC** | Server listen di LAN, proteksi token (localhost gratis) |
+| ✅ **Privasi** | Tanpa token Discord, tanpa API eksternal — semua jalan lokal di HP kamu |
 
-## Prasyarat
+---
 
-- **Termux** dari [F-Droid/GitHub](https://f-droid.org/packages/com.termux/)
-  (bukan Play Store)
-- **Node.js** 20+: `pkg install nodejs`
-- HP Android dengan **Discord** terpasang + saluran yang ada **OwO Bot**
-- **Wireless debugging** (ADB) — untuk mengendalikan device dari dirinya sendiri
+## Cara Kerja
 
-## Instalasi
+```
+┌─────────────┐   HTTP/SSE    ┌──────────────┐   ADB / Shizuku   ┌─────────┐
+│  Browser     │ ◄──────────► │  Termux       │ ────────────────► │ Discord │
+│  (HP / PC)   │   dashboard  │  Node server  │   ketik & tap     │  + OwO  │
+└─────────────┘               │  scheduler    │                   └─────────┘
+                              └──────────────┘
+```
 
-**Pakai git (recommended, mudah update):**
+1. Server membaca `config.json` (rotasi command, interval, limit)
+2. Scheduler memilih command berikutnya → kirim teks ke Discord via
+   `input text` (ADB) / rish (Shizuku) — bukan API
+3. Sebelum tiap kirim, focus dicek: kalau bukan Discord → sesi stop
+4. Browser kamu menampilkan state live lewat SSE
 
+---
+
+## Mulai Cepat
+
+### 1. Prasyarat
+
+| Kebutuhan | Catatan |
+| --- | --- |
+| [Termux](https://f-droid.org/packages/com.termux/) | Ambil dari F-Droid/GitHub — **bukan** Play Store |
+| Node.js ≥ 20 | `pkg install nodejs` |
+| Discord Android | + saluran yang ada **OwO Bot** |
+| Wireless debugging (ADB) | Untuk pairing device ke dirinya sendiri — tanpa PC |
+
+### 2. Instal
+
+<!-- prettier-ignore -->
 ```sh
+# opsi A — git (recommended, mudah update)
 pkg update && pkg install -y nodejs git
 git clone https://github.com/ItsCookie177/owo-macro-dashboard.git
 cd owo-macro-dashboard
+
+# opsi B — dari zip
+pkg update && pkg install -y nodejs
+unzip projek-makro-owo.zip -d ~/
+cd ~/makro
+
+# lanjutannya sama
 npm install
 node scripts/fix-termux-bins.mjs   # perbaiki wrapper npm khusus Termux
 ```
 
-Update nanti: `git pull` lalu `npm install` lagi.
+Update (opsi A): `git pull` lalu `npm install` lagi.
 
-**Tanpa git (dari file zip):**
+### 3. Pasang ADB — sekali saja
 
+<!-- prettier-ignore -->
 ```sh
-pkg update && pkg install -y nodejs
-unzip projek-makro-owo.zip -d ~/
-cd ~/makro
-npm install
-node scripts/fix-termux-bins.mjs
+# 1. HP: Settings → Developer options → Wireless debugging → aktifkan
+# 2. Tap "Pair device with pairing code" — catat kode 6 digit + port
+#    (pakai split-screen supaya jendela pairing tidak keburu tertutup)
+./scripts/setup-adb-pair.sh <pair-port> <kode>
+#    contoh: ./scripts/setup-adb-pair.sh 37000 123456
+
+# 3. Connect memakai port "IP address & Port" di layar yang sama
+adb connect 127.0.0.1:<connect-port>
+
+# 4. Izinkan "Allow USB debugging" yang muncul di layar HP
+# 5. Verifikasi
+./scripts/check-device.sh
 ```
 
-## Pasang ADB (sekali saja)
+> [!NOTE]
+> Setelah **reboot**, wireless debugging mati — cukup ulangi langkah `adb connect`.
+> Pernah nyambung dengan `adb tcpip 5555`? Cukup `adb connect 127.0.0.1:5555`.
 
-1. HP: **Settings → Developer options → Wireless debugging** → aktifkan
-2. Tap **"Pair device with pairing code"** — catat **kode 6 digit** + **port**
-   (pakai split-screen supaya jendela pairing tidak keburu tertutup)
-3. Jalankan (di folder proyek):
-
-   ```sh
-   ./scripts/setup-adb-pair.sh <pair-port> <kode-6-digit>
-   # contoh: ./scripts/setup-adb-pair.sh 37000 123456
-   ```
-
-4. Connect memakai port **"IP address & Port"** yang tampil di layar:
-
-   ```sh
-   adb connect 127.0.0.1:<connect-port>
-   ```
-
-5. Saat diminta di layar HP, izinkan **"Allow USB debugging"**
-6. Verifikasi: `./scripts/check-device.sh`
-
-> Setelah reboot, wireless debugging mati — ulangi langkah 4. Kalau pernah
-> jalan sekali sambung dengan `adb tcpip 5555`, cukup `adb connect 127.0.0.1:5555`.
-
-## Jalankan
+### 4. Jalankan
 
 ```sh
 npm start
 ```
 
-Log akan menampilkan URL dashboard + token, contoh:
+Log menampilkan URL dashboard + token:
 
 ```
 [server] akses PC: http://192.168.0.105:3000/?token=xxxxxxxxxxxxxxxx
 ```
 
-Buka URL itu di browser PC (satu Wi-Fi) atau HP. `config.json` dibuat otomatis
-dengan token random saat pertama jalan — bisa juga diubah lewat UI.
+Buka URL itu di browser — **HP** (di mode split/floating di atas Discord) atau
+**PC** di Wi-Fi yang sama. `config.json` dibuat otomatis dengan token random
+saat pertama jalan.
 
-## Cara pakai
+---
 
-1. Buka **Discord di saluran bersama OwO Bot** — fullscreen, split-screen, atau
-   browser floating window di atas Discord semuanya didukung
-2. Di dashboard: atur **interval** (min 5 dtk; `owo hunt` cooldown ~15 dtk),
-   **rotasi command**, dan batas per command
-3. Tekan **Start** → **pindah fokus ke Discord dalam 10 detik** (grace period)
-4. Sesi berjalan otomatis sampai:
-   - fokus berpindah dari Discord → **auto-stop** (supaya teks tidak nyasar ke
-     aplikasi lain — ini by design)
-   - gagal kirim 3× berturut-turut
-   - lewat batas sesi (`maxSessionMin`, default 10 menit)
-5. **Stop** manual kapan saja; Start lagi untuk sesi baru
+## Penggunaan
 
-## Akses dari PC
+1. Buka **Discord di saluran bersama OwO Bot**
+2. Di dashboard, atur **interval**, **rotasi command**, dan **batas** sesuai selera
+3. Tekan **Start** → **pindah fokus ke Discord dalam 10 detik**
+4. Sesi berjalan otomatis; **Stop** kapan saja
 
-Server listen `0.0.0.0`. Pastikan PC dan HP di **Wi-Fi yang sama**, lalu buka
-URL dari log. Device selain `localhost` wajib menyertakan token.
+### Split-screen & floating window
 
-## Debug & diagnostik
+Preflight cukup dengan Discord **terlihat** — jadi aman kalau dashboard dibuka
+di pane browser split-screen, atau browser floating window di atas Discord.
+Grace period 10 detik setelah Start adalah waktu kamu **tap Discord** supaya
+focus (dan teks keyboard) masuk ke Discord, bukan ke browser.
+
+### Perilaku auto-stop
+
+| Kondisi | Alasan |
+| --- | --- |
+| Focus pindah dari Discord | `input text` selalu masuk ke window yang focus — kalau dipaksa, teks nyasar ke app lain |
+| Gagal kirim 3× berturut-turut | Device tidak responsif / Discord tertutup |
+| Lewat `maxSessionMin` (default 10 menit) | Sesi singkat sesuai desain |
+
+> [!WARNING]
+> Kalau kamu tap browser di tengah sesi (lihat statistik, dll), sesi **akan
+> berhenti otomatis** — ini by design. Start lagi untuk lanjut.
+
+### Akses dari PC
+
+Server listen `0.0.0.0`. Satu Wi-Fi dengan HP → buka URL dari log. Device
+selain `localhost` wajib menyertakan token (`?token=…`).
+
+---
+
+## Konfigurasi
+
+Semua bisa diubah lewat dashboard; edit manual `config.json` juga boleh.
+
+| Field | Default | Keterangan |
+| --- | --- | --- |
+| `intervalSec` | `30` | Jeda antar command (min 5; `owo hunt` cooldown ~15 dtk) |
+| `maxSessionMin` | `10` | Batas durasi sesi, menit |
+| `jitterSec` | `2` | Acak ± detik tiap interval, anti pola |
+| `autoStopOnForegroundLoss` | `true` | Stop saat focus tinggalkan Discord |
+| `rotation[]` | hunt/battle/cf/slots | Daftar command: `text`, `enabled`, `maxPerSession` (`null` = tanpa batas) |
+| `selectors.composerId` | `""` | Auto-terisi dari Probe (`uiautomator dump`); kosong = blind send |
+| `lanToken` | random | Token akses dari device lain |
+
+---
+
+## Diagnostik
 
 ```sh
-./scripts/check-device.sh   # status adb, foreground app, Discord terdeteksi
-npm run typecheck           # typecheck
-npm test                    # unit test
+./scripts/check-device.sh   # status adb, foreground, Discord terdeteksi?
+npm run typecheck           # typecheck TypeScript
+npm test                    # unit test (vitest)
 ```
 
-Di dashboard ada tombol **Probe**: cek adapter, apakah Discord terlihat/focus,
-dan deteksi input composer (`uiautomator dump`).
+Di dashboard, tombol **Probe** mengecek: adapter aktif, Discord terlihat /
+focus, dan deteksi input composer. Hasil probe juga menyimpan `composerId` ke
+config untuk kirim lebih akurat.
+
+---
 
 ## Troubleshooting
 
-| Masalah | Solusi |
+| Gejala | Solusi |
 | --- | --- |
 | Start ditolak "Discord tidak terlihat" | Buka Discord di saluran OwO dulu |
-| Sesi langsung auto-stop | Focus pindah ke aplikasi lain — biarkan focus di Discord |
-| `adb connect refused` | Wireless debugging mati / belum di-pair — ulangi langkah Pasang ADB |
-| Muncul device `emulator-5554` | Aman — adapter otomatis memilih serial device asli |
-| `uiautomator dump` gagal | Pastikan layar tidak sedang layar kunci/animasi berat |
-| Port/route lain | `npm run dev` untuk mode dev (Vite + hot reload) |
+| Sesi langsung auto-stop | Focus pindah ke app lain — biarkan focus di Discord selama sesi |
+| `adb connect refused` | Wireless debugging mati / belum pair — ulangi [Pasang ADB](#3-pasang-adb--sekali-saja) |
+| Ada device `emulator-5554` | Aman — adapter otomatis memilih serial device asli |
+| `uiautomator dump` gagal | Layar sedang kunci / animasi berat — buka ulang Discord |
+| Perubahan UI tidak kelihatan | Pakai `npm run dev` untuk mode development (hot reload) |
 
-## Struktur proyek
+---
+
+## Pengembangan
+
+```sh
+npm run dev      # Vite (web) + tsx watch (api) berdampingan
+npm run build    # build frontend ke dist/
+npm test         # vitest — mock adapter, tanpa device
+npm run typecheck
+```
+
+Adapter dideteksi otomatis: `ShizukuAdapter` → `AdbAdapter` → `MockAdapter`.
+Test unit memakai mock — aman dijalankan di mesin mana pun.
+
+---
+
+## Struktur Proyek
 
 ```
-src/web/        UI React (dashboard, SSE, kontrol)
-src/server/     Express API, scheduler, adapter (adb/shizuku/mock)
-src/shared/     tipe + skema Zod dipakai dua sisi
-scripts/        fix-termux-bins, setup-adb-pair, check-device
+makro/
+├── src/
+│   ├── web/            # UI React — dashboard, SSE, kontrol
+│   ├── server/
+│   │   ├── adapters/   # adb, shizuku, mock + parser target
+│   │   ├── core/       # scheduler, config store, session, logger
+│   │   └── api/        # Express routes
+│   └── shared/         # tipe + skema Zod (dipakai dua sisi)
+├── scripts/            # fix-termux-bins, setup-adb-pair, check-device
+├── index.html
+└── config.json         # dibuat otomatis — jangan di-commit (ada token)
 ```
 
-## Catatan
+---
 
-- Dashboard **mengontrol UI Discord Anda di device ini** — pastikan command
-  dikirim ke saluran yang benar sebelum Start.
-- Gunakan dengan bijak pada akun Anda sendiri.
+<div align="center">
+
+Made for Termux · Gunakan dengan bijak pada akun kamu sendiri
+
+</div>
