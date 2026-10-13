@@ -25,12 +25,26 @@ Termux, diakses dari HP atau PC di Wi-Fi yang sama.
 
 ## Instalasi
 
+**Pakai git (recommended, mudah update):**
+
+```sh
+pkg update && pkg install -y nodejs git
+git clone https://github.com/ItsCookie177/owo-macro-dashboard.git
+cd owo-macro-dashboard
+npm install
+node scripts/fix-termux-bins.mjs   # perbaiki wrapper npm khusus Termux
+```
+
+Update nanti: `git pull` lalu `npm install` lagi.
+
+**Tanpa git (dari file zip):**
+
 ```sh
 pkg update && pkg install -y nodejs
 unzip projek-makro-owo.zip -d ~/
 cd ~/makro
 npm install
-node scripts/fix-termux-bins.mjs   # perbaiki wrapper npm khusus Termux
+node scripts/fix-termux-bins.mjs
 ```
 
 ## Pasang ADB (sekali saja)
