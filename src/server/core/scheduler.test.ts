@@ -8,9 +8,13 @@ import { Session } from './session.js';
 
 function testConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
-    intervalSec: 30,
+    minDelaySec: 22,
+    maxDelaySec: 48,
     maxSessionMin: 10,
-    jitterSec: 0,
+    breakEveryCmd: 0,
+    breakMinSec: 60,
+    breakMaxSec: 120,
+    startGraceSec: 10,
     autoStopOnForegroundLoss: true,
     rotation: [
       { id: 'hunt', text: 'owo hunt', enabled: true, maxPerSession: null },
@@ -22,21 +26,33 @@ function testConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   };
 }
 
-function makeScheduler(config: AppConfig, adapter: MockAdapter) {
+function makeScheduler(
+  config: AppConfig,
+  adapter: MockAdapter,
+  extra: {
+    sleepFn?: (ms: number, signal: AbortSignal) => Promise<void>;
+    random?: () => number;
+  } = {},
+) {
   const session = new Session();
   const logger = new Logger();
   const configStore = {
     get: () => config,
   } as unknown as ConfigStore;
+  const sleeps: number[] = [];
   const scheduler = new Scheduler({
     adapter,
     configStore,
     session,
     logger,
-    sleepFn: async () => {},
+    sleepFn: async (ms, signal) => {
+      sleeps.push(ms);
+      await extra.sleepFn?.(ms, signal);
+    },
     firstDelayMs: 0,
+    random: extra.random,
   });
-  return { scheduler, session, logger };
+  return { scheduler, session, logger, sleeps };
 }
 
 async function waitFor(
@@ -53,20 +69,20 @@ async function waitFor(
 }
 
 describe('computeDelayMs', () => {
-  it('tanpa jitter = interval persis', () => {
-    expect(computeDelayMs(30, 0, () => 0.5)).toBe(30_000);
+  it('random 0 = batas bawah', () => {
+    expect(computeDelayMs(22, 48, () => 0)).toBe(22_000);
   });
 
-  it('jitter penuh minus', () => {
-    expect(computeDelayMs(30, 2, () => 0)).toBe(28_000);
+  it('random 1 = batas atas', () => {
+    expect(computeDelayMs(22, 48, () => 1)).toBe(48_000);
   });
 
-  it('jitter penuh plus', () => {
-    expect(computeDelayMs(30, 2, () => 1)).toBe(32_000);
+  it('random 0.5 = tengah', () => {
+    expect(computeDelayMs(22, 48, () => 0.5)).toBe(35_000);
   });
 
-  it('clamp minimal 1ms', () => {
-    expect(computeDelayMs(0, 2, () => 0)).toBe(1);
+  it('min > max tetap aman (di-swap)', () => {
+    expect(computeDelayMs(48, 22, () => 0)).toBe(22_000);
   });
 });
 
@@ -115,13 +131,90 @@ describe('Scheduler', () => {
     const config = testConfig({
       rotation: [
         { id: 'hunt', text: 'owo hunt', enabled: true, maxPerSession: 2 },
-        { id: 'battle', text: 'owo battle', enabled: false, maxPerSession: null },
+        {
+          id: 'battle',
+          text: 'owo battle',
+          enabled: false,
+          maxPerSession: null,
+        },
       ],
     });
     const { scheduler, session } = makeScheduler(config, adapter);
     await scheduler.start();
     await waitFor(() => session.status === 'idle');
     expect(adapter.sent).toEqual(['owo hunt', 'owo hunt']);
+  });
+
+  it('delay tiap tick dalam rentang min-max', async () => {
+    const adapter = new MockAdapter();
+    const config = testConfig({
+      minDelaySec: 20,
+      maxDelaySec: 40,
+      rotation: [
+        { id: 'hunt', text: 'owo hunt', enabled: true, maxPerSession: 3 },
+      ],
+    });
+    const { scheduler, session, sleeps } = makeScheduler(config, adapter, {
+      random: () => 0.25, // 20 + 0.25*20 = 25s
+    });
+    await scheduler.start();
+    await waitFor(() => session.status === 'idle');
+    expect(sleeps).toEqual([25_000, 25_000, 25_000]);
+  });
+
+  it('micro-break terpicu tiap N command', async () => {
+    const adapter = new MockAdapter();
+    const config = testConfig({
+      breakEveryCmd: 2,
+      breakMinSec: 60,
+      breakMaxSec: 60,
+      rotation: [
+        { id: 'hunt', text: 'owo hunt', enabled: true, maxPerSession: 4 },
+      ],
+    });
+    const { scheduler, session, sleeps, logger } = makeScheduler(
+      config,
+      adapter,
+      { random: () => 0 }, // delay = min tiap saat
+    );
+    await scheduler.start();
+    await waitFor(() => session.status === 'idle');
+    // tick1 kirim, tick2 kirim+break, tick3 kirim, tick4 kirim+break, lalu limit habis
+    expect(sleeps).toEqual([22_000, 60_000, 22_000, 22_000, 60_000, 22_000]);
+    expect(
+      logger.recent().some((l) => /micro-break/.test(l.msg)),
+    ).toBe(true);
+  });
+
+  it('verifikasi human di layar -> auto-stop + error', async () => {
+    const adapter = new MockAdapter();
+    adapter.screenText =
+      'Hey @kamu please complete human verification at owobot.com/captcha';
+    const config = testConfig();
+    const { scheduler, session, logger } = makeScheduler(config, adapter);
+    await scheduler.start();
+    await waitFor(() => session.status === 'error');
+    expect(adapter.sent).toEqual([]);
+    expect(session.snapshot().lastError).toMatch(/verifikasi human/);
+    expect(
+      logger.recent().some((l) => l.level === 'error' && /VERIFIKASI/.test(l.msg)),
+    ).toBe(true);
+  });
+
+  it('dumpUi gagal bukan alasan stop', async () => {
+    const adapter = new MockAdapter();
+    adapter.dumpUi = async () => {
+      throw new Error('idle state');
+    };
+    const config = testConfig({
+      rotation: [
+        { id: 'hunt', text: 'owo hunt', enabled: true, maxPerSession: 1 },
+      ],
+    });
+    const { scheduler, session } = makeScheduler(config, adapter);
+    await scheduler.start();
+    await waitFor(() => session.status === 'idle');
+    expect(adapter.sent).toEqual(['owo hunt']);
   });
 
   it('start saat sudah running ditolak', async () => {
@@ -180,7 +273,6 @@ describe('Scheduler', () => {
       now: Date.now,
       random: () => 0.5,
     });
-    // set foreground false setelah preflight: patch via wrapper
     const origCheck = adapter.checkForeground.bind(adapter);
     adapter.checkForeground = async () => {
       calls += 1;
@@ -189,10 +281,11 @@ describe('Scheduler', () => {
     };
     await scheduler.start();
     await waitFor(() => session.status === 'idle');
-    // satu command terkirim, lalu watchdog stop saat focus hilang
     expect(adapter.sent).toEqual(['owo hunt']);
     expect(
-      logger.recent().some((l) => l.level === 'warn' && /foreground/.test(l.msg)),
+      logger
+        .recent()
+        .some((l) => l.level === 'warn' && /foreground/.test(l.msg)),
     ).toBe(true);
   });
 
@@ -228,9 +321,7 @@ describe('Scheduler', () => {
     await scheduler.stop('emergency');
     expect(session.status).toBe('idle');
     expect(adapter.cleared).toBe(1);
-    expect(
-      logger.recent().some((l) => l.msg === 'emergency stop'),
-    ).toBe(true);
+    expect(logger.recent().some((l) => l.msg === 'emergency stop')).toBe(true);
   });
 
   it('session cap memicu auto-stop', async () => {
@@ -254,9 +345,7 @@ describe('Scheduler', () => {
     await scheduler.start();
     await waitFor(() => session.status === 'idle');
     expect(adapter.sent).toEqual(['owo hunt']);
-    expect(
-      logger.recent().some((l) => /session cap/.test(l.msg)),
-    ).toBe(true);
+    expect(logger.recent().some((l) => /session cap/.test(l.msg))).toBe(true);
   });
 
   it('stop saat idle = no-op', async () => {

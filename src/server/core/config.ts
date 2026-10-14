@@ -13,9 +13,13 @@ import type { AppConfig } from '../../shared/types.js';
 
 export function defaultConfig(): AppConfig {
   return {
-    intervalSec: 30,
+    minDelaySec: 22,
+    maxDelaySec: 48,
     maxSessionMin: 10,
-    jitterSec: 2,
+    breakEveryCmd: 12,
+    breakMinSec: 60,
+    breakMaxSec: 120,
+    startGraceSec: 10,
     autoStopOnForegroundLoss: true,
     rotation: [
       { id: 'hunt', text: 'owo hunt', enabled: true, maxPerSession: null },
@@ -24,9 +28,9 @@ export function defaultConfig(): AppConfig {
         id: 'cf',
         text: 'owo coinflip 100',
         enabled: true,
-        maxPerSession: 20,
+        maxPerSession: 10,
       },
-      { id: 'slots', text: 'owo slots', enabled: true, maxPerSession: 20 },
+      { id: 'slots', text: 'owo slots', enabled: true, maxPerSession: 10 },
     ],
     selectors: { composerId: '' },
     lanToken: '',

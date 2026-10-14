@@ -19,14 +19,16 @@ export default function App() {
   const [connected, setConnected] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [intervalValue, setIntervalValue] = useState('30');
+  const [minDelayValue, setMinDelayValue] = useState('22');
+  const [maxDelayValue, setMaxDelayValue] = useState('48');
   const initialized = useRef(false);
 
   const onState = useCallback((s: StateResponse) => {
     setState(s);
     if (!initialized.current) {
       initialized.current = true;
-      setIntervalValue(String(s.config.intervalSec));
+      setMinDelayValue(String(s.config.minDelaySec));
+      setMaxDelayValue(String(s.config.maxDelaySec));
     }
   }, []);
 
@@ -49,11 +51,27 @@ export default function App() {
   });
 
   async function handleStart() {
+    if (!state) return;
     setBusy(true);
     setActionError(null);
     try {
-      const n = Number(intervalValue.trim());
-      await startSession(n);
+      const minDelaySec = Number(minDelayValue.trim());
+      const maxDelaySec = Number(maxDelayValue.trim());
+      const payload: ConfigInput = {
+        ...state.config,
+        minDelaySec,
+        maxDelaySec,
+      };
+      await putConfig(payload);
+      setState((prev) =>
+        prev
+          ? {
+              ...prev,
+              config: { ...prev.config, minDelaySec, maxDelaySec },
+            }
+          : prev,
+      );
+      await startSession();
     } catch (e) {
       setActionError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -101,11 +119,13 @@ export default function App() {
           <>
             <StatusCard
               stats={state.stats}
-              intervalSec={state.config.intervalSec}
+              maxDelaySec={state.config.maxDelaySec}
             />
             <ControlPanel
-              intervalValue={intervalValue}
-              onIntervalChange={setIntervalValue}
+              minDelayValue={minDelayValue}
+              maxDelayValue={maxDelayValue}
+              onMinDelayChange={setMinDelayValue}
+              onMaxDelayChange={setMaxDelayValue}
               running={running}
               busy={busy}
               onStart={() => void handleStart()}

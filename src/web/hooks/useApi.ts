@@ -38,10 +38,10 @@ export function getState(): Promise<StateResponse> {
   return api<StateResponse>('/api/state');
 }
 
-export function startSession(intervalSec: number): Promise<{ ok: true }> {
+export function startSession(): Promise<{ ok: true }> {
   return api('/api/session/start', {
     method: 'POST',
-    body: JSON.stringify({ intervalSec }),
+    body: JSON.stringify({}),
   });
 }
 

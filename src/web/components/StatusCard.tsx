@@ -22,10 +22,10 @@ function formatDuration(ms: number): string {
 
 type Props = {
   stats: Stats;
-  intervalSec: number;
+  maxDelaySec: number;
 };
 
-export default function StatusCard({ stats, intervalSec }: Props) {
+export default function StatusCard({ stats, maxDelaySec }: Props) {
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -42,8 +42,8 @@ export default function StatusCard({ stats, intervalSec }: Props) {
   let countdown: string | null = null;
   if (stats.status === 'running' && stats.lastSentAt) {
     const elapsed = (now - Date.parse(stats.lastSentAt)) / 1000;
-    const left = Math.max(0, Math.ceil(intervalSec - elapsed));
-    countdown = `dalam ~${left}s`;
+    const left = Math.max(0, Math.ceil(maxDelaySec - elapsed));
+    countdown = `maks ~${left}s`;
   }
 
   return (

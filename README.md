@@ -37,8 +37,10 @@ Web dashboard + server di Termux yang mengendalikan Discord lewat UI automation
 
 | | |
 | --- | --- |
-| ✅ **Rotasi otomatis** | `owo hunt` → `battle` → `coinflip` → `slots`… interval custom + jitter anti-pattern |
-| ✅ **Batas per command** | Mis. coinflip/slots dibatasi 20× per sesi — hunt/battle bebas |
+| ✅ **Rotasi otomatis** | `owo hunt` → `battle` → `coinflip` → `slots`… jeda acak min–max, anti pola |
+| ✅ **Batas per command** | Mis. coinflip/slots dibatasi 10× per sesi — hunt/battle bebas |
+| ✅ **Anti-detect** | Micro-break berkala + stagger awal — bukan ketukan metronom 24/7 |
+| ✅ **Deteksi verifikasi** | Pesan human-verification OwO kebaca dari layar → auto-stop + peringatan |
 | ✅ **Anti salah ketik** | Auto-stop saat focus pindah dari Discord; teks tidak pernah nyasar ke app lain |
 | ✅ **Multi mode layar** | Fullscreen, split-screen, atau browser floating window di atas Discord |
 | ✅ **Adapter otomatis** | Deteksi Shizuku → fallback ADB → mock (untuk demo tanpa device) |
@@ -58,10 +60,11 @@ Web dashboard + server di Termux yang mengendalikan Discord lewat UI automation
                               └──────────────┘
 ```
 
-1. Server membaca `config.json` (rotasi command, interval, limit)
+1. Server membaca `config.json` (rotasi command, rentang jeda, limit)
 2. Scheduler memilih command berikutnya → kirim teks ke Discord via
    `input text` (ADB) / rish (Shizuku) — bukan API
-3. Sebelum tiap kirim, focus dicek: kalau bukan Discord → sesi stop
+3. Sebelum tiap kirim: focus dicek (kalau bukan Discord → stop) dan layar
+   dicek untuk pesan verifikasi human
 4. Browser kamu menampilkan state live lewat SSE
 
 ---
@@ -141,15 +144,25 @@ saat pertama jalan.
 ## Penggunaan
 
 1. Buka **Discord di saluran bersama OwO Bot**
-2. Di dashboard, atur **interval**, **rotasi command**, dan **batas** sesuai selera
-3. Tekan **Start** → **pindah fokus ke Discord dalam 10 detik**
+2. Di dashboard, atur **rentang jeda (min–max)**, **rotasi command**, dan
+   **batas** sesuai selera — jeda tiap kirim diacak di dalam rentang
+3. Tekan **Start** → **pindah fokus ke Discord dalam 10–18 detik**
 4. Sesi berjalan otomatis; **Stop** kapan saja
+
+### Anti-detect (kenapa tidak gampang kena verifikasi)
+
+- **Jeda acak min–max** — bukan interval tetap; OwO tidak bisa "dengar" irama
+- **Micro-break** — tiap ~12 command, istirahat 1–2 menit otomatis
+- **Stagger awal** — command pertama menyusul 10–18 dtk setelah Start
+- **Deteksi verifikasi** — kalau pesan human-verification OwO muncul di layar
+  (lengkap dengan tag kamu), sesi **stop otomatis** + log merah. Selesaikan
+  manual di owobot.com/captcha, lalu Start lagi.
 
 ### Split-screen & floating window
 
 Preflight cukup dengan Discord **terlihat** — jadi aman kalau dashboard dibuka
 di pane browser split-screen, atau browser floating window di atas Discord.
-Grace period 10 detik setelah Start adalah waktu kamu **tap Discord** supaya
+Grace period 10–18 detik setelah Start adalah waktu kamu **tap Discord** supaya
 focus (dan teks keyboard) masuk ke Discord, bukan ke browser.
 
 ### Perilaku auto-stop
@@ -157,6 +170,7 @@ focus (dan teks keyboard) masuk ke Discord, bukan ke browser.
 | Kondisi | Alasan |
 | --- | --- |
 | Focus pindah dari Discord | `input text` selalu masuk ke window yang focus — kalau dipaksa, teks nyasar ke app lain |
+| Pesan verifikasi human terdeteksi | Anti-ban: berhenti sebelum terus-terusan diabaikan OwO |
 | Gagal kirim 3× berturut-turut | Device tidak responsif / Discord tertutup |
 | Lewat `maxSessionMin` (default 10 menit) | Sesi singkat sesuai desain |
 
@@ -177,9 +191,11 @@ Semua bisa diubah lewat dashboard; edit manual `config.json` juga boleh.
 
 | Field | Default | Keterangan |
 | --- | --- | --- |
-| `intervalSec` | `30` | Jeda antar command (min 5; `owo hunt` cooldown ~15 dtk) |
+| `minDelaySec` / `maxDelaySec` | `22` / `48` | Rentang jeda acak antar command (min 5; `owo hunt` cooldown ~15 dtk) |
 | `maxSessionMin` | `10` | Batas durasi sesi, menit |
-| `jitterSec` | `2` | Acak ± detik tiap interval, anti pola |
+| `breakEveryCmd` | `12` | Micro-break tiap N command (`0` = mati) |
+| `breakMinSec` / `breakMaxSec` | `60` / `120` | Durasi acak micro-break |
+| `startGraceSec` | `10` | Grace pindah-fokus awal (+ acak 0–8 dtk stagger) |
 | `autoStopOnForegroundLoss` | `true` | Stop saat focus tinggalkan Discord |
 | `rotation[]` | hunt/battle/cf/slots | Daftar command: `text`, `enabled`, `maxPerSession` (`null` = tanpa batas) |
 | `selectors.composerId` | `""` | Auto-terisi dari Probe (`uiautomator dump`); kosong = blind send |
@@ -206,7 +222,9 @@ config untuk kirim lebih akurat.
 | Gejala | Solusi |
 | --- | --- |
 | Start ditolak "Discord tidak terlihat" | Buka Discord di saluran OwO dulu |
+| Log merah "VERIFIKASI HUMAN terdeteksi" | Selesaikan captcha manual di owobot.com/captcha, lalu Start lagi |
 | Sesi langsung auto-stop | Focus pindah ke app lain — biarkan focus di Discord selama sesi |
+| Sering kena verifikasi | Naikkan `minDelaySec`/`maxDelaySec`, kecilkan limit cf/slots, jangan 24/7 |
 | `adb connect refused` | Wireless debugging mati / belum pair — ulangi [Pasang ADB](#3-pasang-adb--sekali-saja) |
 | Ada device `emulator-5554` | Aman — adapter otomatis memilih serial device asli |
 | `uiautomator dump` gagal | Layar sedang kunci / animasi berat — buka ulang Discord |

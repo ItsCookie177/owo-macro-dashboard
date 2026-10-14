@@ -13,12 +13,32 @@ describe('ConfigStore', () => {
   it('membuat config default + token saat file belum ada', () => {
     const filePath = tempConfigPath();
     const store = new ConfigStore(filePath);
-    expect(store.get().intervalSec).toBe(30);
+    expect(store.get().minDelaySec).toBe(22);
+    expect(store.get().maxDelaySec).toBe(48);
     expect(store.get().rotation).toHaveLength(4);
     expect(store.get().lanToken.length).toBeGreaterThanOrEqual(8);
-    // tersimpan ke disk
     const onDisk = JSON.parse(readFileSync(filePath, 'utf8'));
-    expect(onDisk.intervalSec).toBe(30);
+    expect(onDisk.minDelaySec).toBe(22);
+  });
+
+  it('config lama (intervalSec/jitterSec) di-migrasi dengan default field baru', () => {
+    const filePath = tempConfigPath();
+    writeFileSync(
+      filePath,
+      JSON.stringify({
+        intervalSec: 30,
+        jitterSec: 2,
+        rotation: [
+          { id: 'hunt', text: 'owo hunt', enabled: true, maxPerSession: null },
+        ],
+        selectors: { composerId: '' },
+        lanToken: 'lamacantoken123',
+      }),
+      'utf8',
+    );
+    const store = new ConfigStore(filePath);
+    expect(store.get().minDelaySec).toBe(22);
+    expect(store.get().lanToken).toBe('lamacantoken123');
   });
 
   it('update menyimpan ke disk dan mempertahankan token', () => {
@@ -27,21 +47,23 @@ describe('ConfigStore', () => {
     const token = store.get().lanToken;
     store.update({
       ...defaultConfig(),
-      intervalSec: 45,
+      minDelaySec: 30,
+      maxDelaySec: 60,
     });
-    expect(store.get().intervalSec).toBe(45);
+    expect(store.get().minDelaySec).toBe(30);
+    expect(store.get().maxDelaySec).toBe(60);
     expect(store.get().lanToken).toBe(token);
     const onDisk = JSON.parse(readFileSync(filePath, 'utf8'));
-    expect(onDisk.intervalSec).toBe(45);
+    expect(onDisk.minDelaySec).toBe(30);
     expect(onDisk.lanToken).toBe(token);
   });
 
   it('load ulang membaca nilai yang sama', () => {
     const filePath = tempConfigPath();
     const store = new ConfigStore(filePath);
-    store.update({ ...defaultConfig(), intervalSec: 120 });
+    store.update({ ...defaultConfig(), maxSessionMin: 25 });
     const store2 = new ConfigStore(filePath);
-    expect(store2.get().intervalSec).toBe(120);
+    expect(store2.get().maxSessionMin).toBe(25);
     expect(store2.get().lanToken).toBe(store.get().lanToken);
   });
 
@@ -49,14 +71,14 @@ describe('ConfigStore', () => {
     const filePath = tempConfigPath();
     writeFileSync(filePath, '{ not json', 'utf8');
     const store = new ConfigStore(filePath);
-    expect(store.get().intervalSec).toBe(30);
+    expect(store.get().minDelaySec).toBe(22);
     expect(store.get().lanToken.length).toBeGreaterThanOrEqual(8);
   });
 
   it('file tidak valid menurut skema -> fallback default', () => {
     const filePath = tempConfigPath();
-    writeFileSync(filePath, JSON.stringify({ intervalSec: 1 }), 'utf8');
+    writeFileSync(filePath, JSON.stringify({ minDelaySec: 1 }), 'utf8');
     const store = new ConfigStore(filePath);
-    expect(store.get().intervalSec).toBe(30);
+    expect(store.get().minDelaySec).toBe(22);
   });
 });

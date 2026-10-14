@@ -1,5 +1,6 @@
 import type { AppConfig, CommandDef } from '../../shared/types.js';
 import type { AutomationAdapter } from '../adapters/types.js';
+import { looksLikeVerification } from './captcha.js';
 import type { ConfigStore } from './config.js';
 import type { Logger } from './logger.js';
 import type { Session } from './session.js';
@@ -12,19 +13,24 @@ export type SchedulerDeps = {
   sleepFn?: (ms: number, signal: AbortSignal) => Promise<void>;
   now?: () => number;
   random?: () => number;
-  /** Jeda sebelum kirim pertama (waktu pindah fokus ke Discord). */
+  /** Timpa durasi grace stagger (untuk test). */
   firstDelayMs?: number;
 };
 
+export type DelayOverride = {
+  minDelaySec?: number;
+  maxDelaySec?: number;
+};
+
+/** Jeda acak antar command: uniform dalam [minSec, maxSec]. */
 export function computeDelayMs(
-  intervalSec: number,
-  jitterSec: number,
+  minSec: number,
+  maxSec: number,
   random: () => number,
 ): number {
-  const base = intervalSec * 1000;
-  const jitter =
-    jitterSec > 0 ? (random() * 2 - 1) * jitterSec * 1000 : 0;
-  return Math.max(1, Math.round(base + jitter));
+  const lo = Math.min(minSec, maxSec);
+  const hi = Math.max(minSec, maxSec);
+  return Math.round((lo + random() * (hi - lo)) * 1000);
 }
 
 export function sleep(ms: number, signal: AbortSignal): Promise<void> {
@@ -77,7 +83,7 @@ export class Scheduler {
     return this.deps.session.status === 'running';
   }
 
-  async start(intervalOverride?: number): Promise<void> {
+  async start(delayOverride?: DelayOverride): Promise<void> {
     const { adapter, configStore, session, logger } = this.deps;
     if (session.status === 'running') {
       throw new Error('sesi sedang berjalan');
@@ -97,13 +103,19 @@ export class Scheduler {
     }
 
     const stored = configStore.get();
-    const intervalSec = intervalOverride ?? stored.intervalSec;
-    const config: AppConfig = { ...stored, intervalSec };
+    const config: AppConfig = {
+      ...stored,
+      minDelaySec: delayOverride?.minDelaySec ?? stored.minDelaySec,
+      maxDelaySec: delayOverride?.maxDelaySec ?? stored.maxDelaySec,
+    };
+    if (config.maxDelaySec < config.minDelaySec) {
+      throw new Error('maxDelaySec harus >= minDelaySec');
+    }
 
     this.abort = new AbortController();
     session.begin(new Date());
     logger.info(
-      `session started (interval ${intervalSec}s, adapter ${adapter.name})`,
+      `session started (delay ${config.minDelaySec}-${config.maxDelaySec}s, adapter ${adapter.name})`,
     );
     this.loopPromise = this.loop(config).catch((err) => {
       logger.error(`scheduler crash: ${err}`);
@@ -141,14 +153,16 @@ export class Scheduler {
 
     const counts: Record<string, number> = {};
     const deadline = now() + config.maxSessionMin * 60_000;
-    const firstDelay = this.deps.firstDelayMs ?? 10_000;
+    // Stagger: grace pindah-fokus + acak 0-8 dtk tambahan, anti pola serempak.
+    const firstDelay =
+      this.deps.firstDelayMs ??
+      config.startGraceSec * 1000 + Math.round(random() * 8000);
     let failures = 0;
     let idx = 0;
 
-    // Grace period: beri waktu user pindah tap ke Discord (split-screen).
     if (firstDelay > 0) {
       logger.info(
-        `kirim pertama dalam ${Math.round(firstDelay / 1000)} dtk — pindah fokus ke Discord sekarang`,
+        `kirim pertama dalam ~${Math.round(firstDelay / 1000)} dtk — pindah fokus ke Discord sekarang`,
       );
       await sleepFn(firstDelay, signal);
       if (signal.aborted) {
@@ -158,9 +172,27 @@ export class Scheduler {
     }
 
     while (!signal.aborted) {
+      // Deteksi verifikasi human di layar; dump gagal = lewati cek, jangan stop.
+      if (adapter.dumpUi) {
+        try {
+          const screenText = await adapter.dumpUi();
+          if (looksLikeVerification(screenText)) {
+            logger.error(
+              'VERIFIKASI HUMAN terdeteksi di layar — auto-stop. Selesaikan manual: owobot.com/captcha',
+            );
+            session.markError('verifikasi human terdeteksi — auto-stop');
+            break;
+          }
+        } catch {
+          // uiautomator bisa flaky (animasi/lock) — skip cek tick ini
+        }
+      }
+
       const picked = nextCommand(config.rotation, counts, idx);
       if (!picked) {
-        logger.info('tidak ada command tersisa (limit habis/disabled) — sesi selesai');
+        logger.info(
+          'tidak ada command tersisa (limit habis/disabled) — sesi selesai',
+        );
         break;
       }
       idx = (idx + picked.offset + 1) % config.rotation.length;
@@ -198,8 +230,22 @@ export class Scheduler {
       const upcoming = nextCommand(config.rotation, counts, idx);
       session.markNext(upcoming ? upcoming.cmd.id : null);
 
+      // Micro-break berkala: jeda panjang biar pola tidak nonstop.
+      const totalSent = Object.values(counts).reduce((a, b) => a + b, 0);
+      if (config.breakEveryCmd > 0 && totalSent % config.breakEveryCmd === 0) {
+        const breakMs = computeDelayMs(
+          config.breakMinSec,
+          config.breakMaxSec,
+          random,
+        );
+        logger.info(
+          `micro-break ~${Math.round(breakMs / 1000)} dtk (${totalSent} command terkirim)`,
+        );
+        await sleepFn(breakMs, signal);
+      }
+
       await sleepFn(
-        computeDelayMs(config.intervalSec, config.jitterSec, random),
+        computeDelayMs(config.minDelaySec, config.maxDelaySec, random),
         signal,
       );
     }

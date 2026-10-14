@@ -1,27 +1,42 @@
 import { AlertTriangle, Play, Square } from 'lucide-react';
 
-export type IntervalValidation =
-  | { ok: true; value: number; warn: string | null }
+export type DelayValidation =
+  | { ok: true; min: number; max: number; warn: string | null }
   | { ok: false; error: string };
 
-export function validateInterval(raw: string): IntervalValidation {
+export function parseDelayField(raw: string): number | null {
   const v = raw.trim();
-  if (v === '') return { ok: false, error: 'Masukkan angka' };
+  if (v === '') return null;
   const n = Number(v);
-  if (!Number.isFinite(n) || !Number.isInteger(n)) {
-    return { ok: false, error: 'Harus bilangan bulat' };
+  if (!Number.isFinite(n) || !Number.isInteger(n)) return null;
+  return n;
+}
+
+export function validateDelayRange(
+  minRaw: string,
+  maxRaw: string,
+): DelayValidation {
+  const min = parseDelayField(minRaw);
+  const max = parseDelayField(maxRaw);
+  if (min === null || max === null) {
+    return { ok: false, error: 'Isi kedua kolom dengan bilangan bulat' };
   }
-  if (n < 5) return { ok: false, error: 'Min 5 detik' };
-  if (n > 600) return { ok: false, error: 'Maks 600 detik' };
-  if (n < 15) {
-    return { ok: true, value: n, warn: 'Di bawah cooldown OwO (~15 detik)' };
+  if (min < 5 || max > 600) {
+    return { ok: false, error: 'Rentang 5–600 detik' };
   }
-  return { ok: true, value: n, warn: null };
+  if (max < min) {
+    return { ok: false, error: 'Maks harus ≥ min' };
+  }
+  const warn =
+    min < 15 ? 'Min di bawah cooldown OwO (~15 detik)' : null;
+  return { ok: true, min, max, warn };
 }
 
 type Props = {
-  intervalValue: string;
-  onIntervalChange: (v: string) => void;
+  minDelayValue: string;
+  maxDelayValue: string;
+  onMinDelayChange: (v: string) => void;
+  onMaxDelayChange: (v: string) => void;
   running: boolean;
   busy: boolean;
   onStart: () => void;
@@ -30,33 +45,44 @@ type Props = {
 };
 
 export default function ControlPanel({
-  intervalValue,
-  onIntervalChange,
+  minDelayValue,
+  maxDelayValue,
+  onMinDelayChange,
+  onMaxDelayChange,
   running,
   busy,
   onStart,
   onStop,
   onEmergency,
 }: Props) {
-  const validation = validateInterval(intervalValue);
+  const validation = validateDelayRange(minDelayValue, maxDelayValue);
+  const inputClass =
+    'w-20 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-slate-100';
 
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-4">
-      <label
-        htmlFor="interval"
-        className="block text-sm font-medium text-slate-700"
-      >
-        Interval
-      </label>
+      <span className="block text-sm font-medium text-slate-700">
+        Jeda antar command (acak)
+      </span>
       <div className="mt-1 flex items-center gap-2">
         <input
-          id="interval"
+          aria-label="Jeda minimum"
           type="text"
           inputMode="numeric"
-          value={intervalValue}
+          value={minDelayValue}
           disabled={running}
-          onChange={(e) => onIntervalChange(e.target.value)}
-          className="w-24 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-slate-100"
+          onChange={(e) => onMinDelayChange(e.target.value)}
+          className={inputClass}
+        />
+        <span className="text-sm text-slate-500">–</span>
+        <input
+          aria-label="Jeda maksimum"
+          type="text"
+          inputMode="numeric"
+          value={maxDelayValue}
+          disabled={running}
+          onChange={(e) => onMaxDelayChange(e.target.value)}
+          className={inputClass}
         />
         <span className="text-sm text-slate-600">detik</span>
       </div>

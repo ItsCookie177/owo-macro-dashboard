@@ -35,9 +35,13 @@ export interface StateResponse {
 }
 
 export interface AppConfig {
-  intervalSec: number;
+  minDelaySec: number;
+  maxDelaySec: number;
   maxSessionMin: number;
-  jitterSec: number;
+  breakEveryCmd: number;
+  breakMinSec: number;
+  breakMaxSec: number;
+  startGraceSec: number;
   autoStopOnForegroundLoss: boolean;
   rotation: CommandDef[];
   selectors: { composerId: string };

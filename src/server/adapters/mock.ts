@@ -7,6 +7,7 @@ export class MockAdapter implements AutomationAdapter {
   foreground = true;
   failAllSends = false;
   cleared = 0;
+  screenText = '';
 
   async isAvailable(): Promise<boolean> {
     return this.available;
@@ -29,6 +30,10 @@ export class MockAdapter implements AutomationAdapter {
 
   async clearComposer(): Promise<void> {
     this.cleared += 1;
+  }
+
+  async dumpUi(): Promise<string> {
+    return this.screenText;
   }
 
   async dispose(): Promise<void> {}

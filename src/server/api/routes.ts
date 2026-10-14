@@ -61,7 +61,7 @@ export function registerRoutes(app: Express, ctx: AppContext): void {
       return;
     }
     try {
-      await scheduler.start(parsed.data.intervalSec);
+      await scheduler.start(parsed.data);
       res.status(202).json({ ok: true });
     } catch (e) {
       res.status(400).json({
