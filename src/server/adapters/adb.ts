@@ -13,6 +13,7 @@ const DEFAULT_TIMEOUT_MS = 15_000;
 export class AdbAdapter implements AutomationAdapter {
   readonly name = 'adb' as const;
   private serial: string | null = null;
+  private savedTimeout: string | null = null;
 
   constructor(private readonly spawnFn: SpawnFn = spawn as SpawnFn) {}
 
@@ -159,5 +160,23 @@ export class AdbAdapter implements AutomationAdapter {
     throw lastErr ?? new Error('uiautomator dump gagal');
   }
 
-  async dispose(): Promise<void> {}
+  async keepScreenAwake(): Promise<void> {
+    if (this.savedTimeout !== null) return; // sudah aktif
+    const out = await this.run('settings get system screen_off_timeout');
+    const val = out.trim();
+    this.savedTimeout = /^\d+$/.test(val) ? val : '30000';
+    // 15 menit — menutup maxSessionMin default + margin
+    await this.run('settings put system screen_off_timeout 900000');
+  }
+
+  async restoreScreenTimeout(): Promise<void> {
+    if (this.savedTimeout === null) return;
+    const original = this.savedTimeout;
+    this.savedTimeout = null;
+    await this.run(`settings put system screen_off_timeout ${original}`);
+  }
+
+  async dispose(): Promise<void> {
+    await this.restoreScreenTimeout().catch(() => {});
+  }
 }

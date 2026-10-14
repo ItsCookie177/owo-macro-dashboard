@@ -9,5 +9,9 @@ export interface AutomationAdapter {
   clearComposer(): Promise<void>;
   /** Dump UI hierarchy (uiautomator). Opsional — hanya untuk probe. */
   dumpUi?(): Promise<string>;
+  /** Tahan layar nyala selama sesi (simpan timeout asli dulu). */
+  keepScreenAwake?(): Promise<void>;
+  /** Kembalikan timeout layar seperti semula. */
+  restoreScreenTimeout?(): Promise<void>;
   dispose(): Promise<void>;
 }

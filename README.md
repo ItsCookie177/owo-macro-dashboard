@@ -41,6 +41,7 @@ Web dashboard + server di Termux yang mengendalikan Discord lewat UI automation
 | ✅ **Batas per command** | Mis. coinflip/slots dibatasi 10× per sesi — hunt/battle bebas |
 | ✅ **Anti-detect** | Micro-break berkala + stagger awal — bukan ketukan metronom 24/7 |
 | ✅ **Deteksi verifikasi** | Pesan human-verification OwO kebaca dari layar → auto-stop + peringatan |
+| ✅ **Layar anti-mati** | Selama sesi, timeout layar dinaikkan otomatis — restore setelah stop |
 | ✅ **Anti salah ketik** | Auto-stop saat focus pindah dari Discord; teks tidak pernah nyasar ke app lain |
 | ✅ **Multi mode layar** | Fullscreen, split-screen, atau browser floating window di atas Discord |
 | ✅ **Adapter otomatis** | Deteksi Shizuku → fallback ADB → mock (untuk demo tanpa device) |

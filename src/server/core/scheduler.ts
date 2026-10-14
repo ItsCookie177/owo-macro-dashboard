@@ -114,6 +114,12 @@ export class Scheduler {
 
     this.abort = new AbortController();
     session.begin(new Date());
+    // Layar tetap nyala selama sesi (timeout disimpan, dipulihkan di akhir).
+    try {
+      await adapter.keepScreenAwake?.();
+    } catch (e) {
+      logger.warn(`keep screen awake gagal: ${e}`);
+    }
     logger.info(
       `session started (delay ${config.minDelaySec}-${config.maxDelaySec}s, adapter ${adapter.name})`,
     );
@@ -159,97 +165,107 @@ export class Scheduler {
       config.startGraceSec * 1000 + Math.round(random() * 8000);
     let failures = 0;
     let idx = 0;
+    // Target waktu kirim berikutnya — cek focus/dump yang makan waktu
+    // di depan tidak lagi menumpuk di atas delay (interval tetap akurat).
+    let nextSendAt = 0;
 
-    if (firstDelay > 0) {
-      logger.info(
-        `kirim pertama dalam ~${Math.round(firstDelay / 1000)} dtk — pindah fokus ke Discord sekarang`,
-      );
-      await sleepFn(firstDelay, signal);
-      if (signal.aborted) {
-        if (session.status === 'running') session.end('idle');
-        return;
-      }
-    }
-
-    while (!signal.aborted) {
-      // Deteksi verifikasi human di layar; dump gagal = lewati cek, jangan stop.
-      if (adapter.dumpUi) {
-        try {
-          const screenText = await adapter.dumpUi();
-          if (looksLikeVerification(screenText)) {
-            logger.error(
-              'VERIFIKASI HUMAN terdeteksi di layar — auto-stop. Selesaikan manual: owobot.com/captcha',
-            );
-            session.markError('verifikasi human terdeteksi — auto-stop');
-            break;
-          }
-        } catch {
-          // uiautomator bisa flaky (animasi/lock) — skip cek tick ini
-        }
-      }
-
-      const picked = nextCommand(config.rotation, counts, idx);
-      if (!picked) {
+    try {
+      if (firstDelay > 0) {
         logger.info(
-          'tidak ada command tersisa (limit habis/disabled) — sesi selesai',
+          `kirim pertama dalam ~${Math.round(firstDelay / 1000)} dtk — pindah fokus ke Discord sekarang`,
         );
-        break;
-      }
-      idx = (idx + picked.offset + 1) % config.rotation.length;
-      session.markNext(picked.cmd.id);
-
-      if (
-        config.autoStopOnForegroundLoss &&
-        !(await adapter.checkForeground())
-      ) {
-        logger.warn('Discord kehilangan foreground — auto-stop');
-        break;
-      }
-      if (now() > deadline) {
-        logger.warn(
-          `session cap ${config.maxSessionMin} menit tercapai — auto-stop`,
-        );
-        break;
+        await sleepFn(firstDelay, signal);
       }
 
-      try {
-        await adapter.sendCommand(picked.cmd.text);
-        counts[picked.cmd.id] = (counts[picked.cmd.id] ?? 0) + 1;
-        failures = 0;
-        session.markSent(picked.cmd.id);
-        logger.info(`sent: ${picked.cmd.text}`);
-      } catch (e) {
-        failures += 1;
-        logger.error(`gagal kirim "${picked.cmd.text}" (${failures}/3): ${e}`);
-        if (failures >= 3) {
-          session.markError(`3x gagal kirim berturut-turut: ${e}`);
+      while (!signal.aborted) {
+        // Deteksi verifikasi human di layar; dump gagal = lewati cek, jangan stop.
+        if (adapter.dumpUi) {
+          try {
+            const screenText = await adapter.dumpUi();
+            if (looksLikeVerification(screenText)) {
+              logger.error(
+                'VERIFIKASI HUMAN terdeteksi di layar — auto-stop. Selesaikan manual: owobot.com/captcha',
+              );
+              session.markError('verifikasi human terdeteksi — auto-stop');
+              break;
+            }
+          } catch {
+            // uiautomator bisa flaky (animasi/lock) — skip cek tick ini
+          }
+        }
+
+        const picked = nextCommand(config.rotation, counts, idx);
+        if (!picked) {
+          logger.info(
+            'tidak ada command tersisa (limit habis/disabled) — sesi selesai',
+          );
           break;
         }
+        idx = (idx + picked.offset + 1) % config.rotation.length;
+        session.markNext(picked.cmd.id);
+
+        if (
+          config.autoStopOnForegroundLoss &&
+          !(await adapter.checkForeground())
+        ) {
+          logger.warn('Discord kehilangan foreground — auto-stop');
+          break;
+        }
+        if (now() > deadline) {
+          logger.warn(
+            `session cap ${config.maxSessionMin} menit tercapai — auto-stop`,
+          );
+          break;
+        }
+
+        // Micro-break: ditambahkan ke target berikutnya, bukan sleep terpisah.
+        const totalSent = Object.values(counts).reduce((a, b) => a + b, 0);
+        if (config.breakEveryCmd > 0 && totalSent > 0 && totalSent % config.breakEveryCmd === 0) {
+          const breakMs = computeDelayMs(
+            config.breakMinSec,
+            config.breakMaxSec,
+            random,
+          );
+          nextSendAt += breakMs;
+          logger.info(
+            `micro-break ~${Math.round(breakMs / 1000)} dtk (${totalSent} command terkirim)`,
+          );
+        }
+
+        const wait = nextSendAt - now();
+        if (wait > 0 && !signal.aborted) {
+          await sleepFn(wait, signal);
+        }
+        if (signal.aborted) break;
+
+        try {
+          await adapter.sendCommand(picked.cmd.text);
+          counts[picked.cmd.id] = (counts[picked.cmd.id] ?? 0) + 1;
+          failures = 0;
+          session.markSent(picked.cmd.id);
+          logger.info(`sent: ${picked.cmd.text}`);
+        } catch (e) {
+          failures += 1;
+          logger.error(`gagal kirim "${picked.cmd.text}" (${failures}/3): ${e}`);
+          if (failures >= 3) {
+            session.markError(`3x gagal kirim berturut-turut: ${e}`);
+            break;
+          }
+        }
+
+        const upcoming = nextCommand(config.rotation, counts, idx);
+        session.markNext(upcoming ? upcoming.cmd.id : null);
+
+        nextSendAt =
+          now() + computeDelayMs(config.minDelaySec, config.maxDelaySec, random);
       }
-
-      const upcoming = nextCommand(config.rotation, counts, idx);
-      session.markNext(upcoming ? upcoming.cmd.id : null);
-
-      // Micro-break berkala: jeda panjang biar pola tidak nonstop.
-      const totalSent = Object.values(counts).reduce((a, b) => a + b, 0);
-      if (config.breakEveryCmd > 0 && totalSent % config.breakEveryCmd === 0) {
-        const breakMs = computeDelayMs(
-          config.breakMinSec,
-          config.breakMaxSec,
-          random,
-        );
-        logger.info(
-          `micro-break ~${Math.round(breakMs / 1000)} dtk (${totalSent} command terkirim)`,
-        );
-        await sleepFn(breakMs, signal);
+    } finally {
+      try {
+        await adapter.restoreScreenTimeout?.();
+      } catch {
+        /* best effort */
       }
-
-      await sleepFn(
-        computeDelayMs(config.minDelaySec, config.maxDelaySec, random),
-        signal,
-      );
+      if (session.status === 'running') session.end('idle');
     }
-
-    if (session.status === 'running') session.end('idle');
   }
 }

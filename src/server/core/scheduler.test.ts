@@ -145,7 +145,7 @@ describe('Scheduler', () => {
     expect(adapter.sent).toEqual(['owo hunt', 'owo hunt']);
   });
 
-  it('delay tiap tick dalam rentang min-max', async () => {
+  it('delay tiap tick dalam rentang min-max (akurat, tanpa overhead)', async () => {
     const adapter = new MockAdapter();
     const config = testConfig({
       minDelaySec: 20,
@@ -154,12 +154,27 @@ describe('Scheduler', () => {
         { id: 'hunt', text: 'owo hunt', enabled: true, maxPerSession: 3 },
       ],
     });
-    const { scheduler, session, sleeps } = makeScheduler(config, adapter, {
+    const session = new Session();
+    const logger = new Logger();
+    let fakeNow = 0;
+    const sleeps: number[] = [];
+    const scheduler = new Scheduler({
+      adapter,
+      configStore: { get: () => config } as unknown as ConfigStore,
+      session,
+      logger,
+      sleepFn: async (ms) => {
+        sleeps.push(ms);
+        fakeNow += ms;
+      },
+      firstDelayMs: 0,
+      now: () => fakeNow,
       random: () => 0.25, // 20 + 0.25*20 = 25s
     });
     await scheduler.start();
     await waitFor(() => session.status === 'idle');
-    expect(sleeps).toEqual([25_000, 25_000, 25_000]);
+    // kirim pertama langsung; sisanya tepat 25s (cek focus/dump tidak menumpuk)
+    expect(sleeps).toEqual([25_000, 25_000]);
   });
 
   it('micro-break terpicu tiap N command', async () => {
@@ -172,18 +187,44 @@ describe('Scheduler', () => {
         { id: 'hunt', text: 'owo hunt', enabled: true, maxPerSession: 4 },
       ],
     });
-    const { scheduler, session, sleeps, logger } = makeScheduler(
-      config,
+    const session = new Session();
+    const logger = new Logger();
+    let fakeNow = 0;
+    const sleeps: number[] = [];
+    const scheduler = new Scheduler({
       adapter,
-      { random: () => 0 }, // delay = min tiap saat
-    );
+      configStore: { get: () => config } as unknown as ConfigStore,
+      session,
+      logger,
+      sleepFn: async (ms) => {
+        sleeps.push(ms);
+        fakeNow += ms;
+      },
+      firstDelayMs: 0,
+      now: () => fakeNow,
+      random: () => 0, // delay = min (22s) tiap saat
+    });
     await scheduler.start();
     await waitFor(() => session.status === 'idle');
-    // tick1 kirim, tick2 kirim+break, tick3 kirim, tick4 kirim+break, lalu limit habis
-    expect(sleeps).toEqual([22_000, 60_000, 22_000, 22_000, 60_000, 22_000]);
+    // tick2: 22s; tick3: break 60s + 22s = 82s; tick4: 22s; tick5 limit habis
+    expect(sleeps).toEqual([22_000, 82_000, 22_000]);
     expect(
       logger.recent().some((l) => /micro-break/.test(l.msg)),
     ).toBe(true);
+  });
+
+  it('layar dipertahankan nyala saat sesi dan dipulihkan setelahnya', async () => {
+    const adapter = new MockAdapter();
+    const config = testConfig({
+      rotation: [
+        { id: 'hunt', text: 'owo hunt', enabled: true, maxPerSession: 1 },
+      ],
+    });
+    const { scheduler, session } = makeScheduler(config, adapter);
+    await scheduler.start();
+    await waitFor(() => session.status === 'idle');
+    expect(adapter.wakeKept).toBe(1);
+    expect(adapter.wakeRestored).toBe(1);
   });
 
   it('verifikasi human di layar -> auto-stop + error', async () => {
@@ -344,7 +385,7 @@ describe('Scheduler', () => {
     });
     await scheduler.start();
     await waitFor(() => session.status === 'idle');
-    expect(adapter.sent).toEqual(['owo hunt']);
+    expect(adapter.sent).toEqual(['owo hunt', 'owo battle']);
     expect(logger.recent().some((l) => /session cap/.test(l.msg))).toBe(true);
   });
 

@@ -8,6 +8,8 @@ export class MockAdapter implements AutomationAdapter {
   failAllSends = false;
   cleared = 0;
   screenText = '';
+  wakeKept = 0;
+  wakeRestored = 0;
 
   async isAvailable(): Promise<boolean> {
     return this.available;
@@ -34,6 +36,14 @@ export class MockAdapter implements AutomationAdapter {
 
   async dumpUi(): Promise<string> {
     return this.screenText;
+  }
+
+  async keepScreenAwake(): Promise<void> {
+    this.wakeKept += 1;
+  }
+
+  async restoreScreenTimeout(): Promise<void> {
+    this.wakeRestored += 1;
   }
 
   async dispose(): Promise<void> {}

@@ -42,6 +42,7 @@ export class ShizukuAdapter implements AutomationAdapter {
   readonly name = 'shizuku' as const;
   private proc: ChildProcessWithoutNullStreams | null = null;
   private buffer = '';
+  private savedTimeout: string | null = null;
   private pending:
     | {
         resolve: (v: { stdout: string; code: number }) => void;
@@ -293,7 +294,27 @@ export class ShizukuAdapter implements AutomationAdapter {
     throw lastErr ?? new Error('uiautomator dump gagal');
   }
 
+  async keepScreenAwake(): Promise<void> {
+    if (this.savedTimeout !== null) return;
+    const out = await this.runWithRestart(
+      'settings get system screen_off_timeout',
+    );
+    const val = out.trim();
+    this.savedTimeout = /^\d+$/.test(val) ? val : '30000';
+    await this.runWithRestart('settings put system screen_off_timeout 900000');
+  }
+
+  async restoreScreenTimeout(): Promise<void> {
+    if (this.savedTimeout === null) return;
+    const original = this.savedTimeout;
+    this.savedTimeout = null;
+    await this.runWithRestart(
+      `settings put system screen_off_timeout ${original}`,
+    );
+  }
+
   async dispose(): Promise<void> {
+    await this.restoreScreenTimeout().catch(() => {});
     this.killSession();
   }
 }
