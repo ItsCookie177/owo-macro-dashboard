@@ -1,3 +1,5 @@
+import { AlertTriangle, WifiOff } from 'lucide-react';
+
 type Props = {
   message: string | null;
   sseDown: boolean;
@@ -8,13 +10,15 @@ export default function Banner({ message, sseDown }: Props) {
   return (
     <div className="space-y-2">
       {message && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-          {message}
+        <div className="flex items-start gap-2.5 rounded-[10px] border border-danger-line bg-danger-soft px-3.5 py-3 text-sm font-medium text-danger-ink">
+          <AlertTriangle size={17} className="mt-0.5 flex-none" />
+          <span>{message}</span>
         </div>
       )}
       {sseDown && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
-          Koneksi log terputus — mencoba ulang…
+        <div className="flex items-center gap-2.5 rounded-[10px] border border-warn-line bg-warn-soft px-3.5 py-3 text-sm font-medium text-warn-ink">
+          <WifiOff size={17} className="flex-none" />
+          <span>Koneksi log terputus — mencoba ulang…</span>
         </div>
       )}
     </div>

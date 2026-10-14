@@ -1,4 +1,4 @@
-import { AlertTriangle, Play, Square } from 'lucide-react';
+import { AlertTriangle, Play, Square, Zap } from 'lucide-react';
 
 export type DelayValidation =
   | { ok: true; min: number; max: number; warn: string | null }
@@ -27,8 +27,7 @@ export function validateDelayRange(
   if (max < min) {
     return { ok: false, error: 'Maks harus ≥ min' };
   }
-  const warn =
-    min < 15 ? 'Min di bawah cooldown OwO (~15 detik)' : null;
+  const warn = min < 15 ? 'Min di bawah cooldown OwO (~15 detik)' : null;
   return { ok: true, min, max, warn };
 }
 
@@ -56,51 +55,60 @@ export default function ControlPanel({
   onEmergency,
 }: Props) {
   const validation = validateDelayRange(minDelayValue, maxDelayValue);
-  const inputClass =
-    'w-20 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-slate-100';
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-4">
-      <span className="block text-sm font-medium text-slate-700">
-        Jeda antar command (acak)
-      </span>
-      <div className="mt-1 flex items-center gap-2">
-        <input
-          aria-label="Jeda minimum"
-          type="text"
-          inputMode="numeric"
-          value={minDelayValue}
-          disabled={running}
-          onChange={(e) => onMinDelayChange(e.target.value)}
-          className={inputClass}
-        />
-        <span className="text-sm text-slate-500">–</span>
-        <input
-          aria-label="Jeda maksimum"
-          type="text"
-          inputMode="numeric"
-          value={maxDelayValue}
-          disabled={running}
-          onChange={(e) => onMaxDelayChange(e.target.value)}
-          className={inputClass}
-        />
-        <span className="text-sm text-slate-600">detik</span>
-      </div>
-      {!validation.ok && (
-        <p className="mt-1 text-xs text-red-600">{validation.error}</p>
-      )}
-      {validation.ok && validation.warn && (
-        <p className="mt-1 flex items-center gap-1 text-xs text-amber-600">
-          <AlertTriangle size={12} /> {validation.warn}
-        </p>
-      )}
+    <section className="card">
+      <h2 className="card-title">
+        <Play size={19} /> Kendali Sesi
+      </h2>
 
-      <div className="mt-4 flex flex-wrap gap-2">
+      <div className="mt-4">
+        <span className="text-sm font-semibold text-ink">
+          Jeda antar command
+        </span>
+        <p className="text-xs text-ink-2">
+          Diacak acak di dalam rentang tiap kirim — anti pola.
+        </p>
+        <div className="mt-2 flex items-center gap-2">
+          <input
+            aria-label="Jeda minimum"
+            type="text"
+            inputMode="numeric"
+            value={minDelayValue}
+            disabled={running}
+            onChange={(e) => onMinDelayChange(e.target.value)}
+            className="input w-20"
+          />
+          <span className="text-ink-3">–</span>
+          <input
+            aria-label="Jeda maksimum"
+            type="text"
+            inputMode="numeric"
+            value={maxDelayValue}
+            disabled={running}
+            onChange={(e) => onMaxDelayChange(e.target.value)}
+            className="input w-20"
+          />
+          <span className="text-sm text-ink-2">detik</span>
+        </div>
+        {!validation.ok && (
+          <p className="mt-1.5 text-xs font-medium text-danger-ink">
+            {validation.error}
+          </p>
+        )}
+        {validation.ok && validation.warn && (
+          <p className="mt-1.5 flex items-center gap-1 text-xs font-medium text-warn-ink">
+            <AlertTriangle size={12} /> {validation.warn}
+          </p>
+        )}
+      </div>
+
+      <div className="mt-5 flex flex-wrap gap-2">
         <button
           type="button"
           onClick={onStart}
           disabled={running || busy || !validation.ok}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
+          className="btn btn-primary"
         >
           <Play size={16} /> {busy ? 'Memulai…' : 'Start'}
         </button>
@@ -108,7 +116,7 @@ export default function ControlPanel({
           type="button"
           onClick={onStop}
           disabled={!running || busy}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+          className="btn btn-ghost"
         >
           <Square size={16} /> Stop
         </button>
@@ -116,11 +124,15 @@ export default function ControlPanel({
           type="button"
           onClick={onEmergency}
           disabled={!running || busy}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-40"
+          className="btn btn-danger"
         >
-          <AlertTriangle size={16} /> Emergency Stop
+          <Zap size={16} /> Emergency
         </button>
       </div>
+
+      <p className="mt-3 text-xs text-ink-3">
+        Setelah Start, pindah fokus ke Discord dalam 10–18 detik.
+      </p>
     </section>
   );
 }

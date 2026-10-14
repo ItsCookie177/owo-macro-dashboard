@@ -1,14 +1,21 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { LogEntry, StateResponse } from '../shared/types';
 import type { ConfigInput } from '../shared/schema';
 import Banner from './components/Banner';
 import ControlPanel from './components/ControlPanel';
-import Header from './components/Header';
+import Diagnostik from './components/Diagnostik';
 import LogViewer from './components/LogViewer';
 import RotationEditor from './components/RotationEditor';
+import Sidebar, { MobileLogo, MobileNav } from './components/Sidebar';
 import StatsGrid from './components/StatsGrid';
 import StatusCard from './components/StatusCard';
-import { eventsUrl, getState, putConfig, startSession, stopSession } from './hooks/useApi';
+import {
+  eventsUrl,
+  getState,
+  putConfig,
+  startSession,
+  stopSession,
+} from './hooks/useApi';
 import { useEventStream } from './hooks/useEventStream';
 
 const MAX_LOGS = 500;
@@ -21,6 +28,7 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [minDelayValue, setMinDelayValue] = useState('22');
   const [maxDelayValue, setMaxDelayValue] = useState('48');
+  const [activeNav, setActiveNav] = useState('sesi');
   const initialized = useRef(false);
 
   const onState = useCallback((s: StateResponse) => {
@@ -65,10 +73,7 @@ export default function App() {
       await putConfig(payload);
       setState((prev) =>
         prev
-          ? {
-              ...prev,
-              config: { ...prev.config, minDelaySec, maxDelaySec },
-            }
+          ? { ...prev, config: { ...prev.config, minDelaySec, maxDelaySec } }
           : prev,
       );
       await startSession();
@@ -108,47 +113,100 @@ export default function App() {
     }
   }
 
+  function handleNavigate(id: string) {
+    setActiveNav(id);
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
+  }
+
+  // Nav aktif mengikuti section yang terlihat di viewport.
+  useEffect(() => {
+    const ids = ['sesi', 'rotasi', 'statistik', 'log', 'diagnostik'];
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) setActiveNav(entry.target.id);
+        }
+      },
+      { rootMargin: '-30% 0px -55% 0px' },
+    );
+    for (const id of ids) {
+      const el = document.getElementById(id);
+      if (el) observer.observe(el);
+    }
+    return () => observer.disconnect();
+  }, [state]);
+
   const running = state?.status === 'running';
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <Header adapter={state?.adapter ?? '…'} connected={connected} />
-      <main className="mx-auto max-w-xl space-y-3 p-4">
-        <Banner message={actionError} sseDown={!connected} />
-        {state ? (
-          <>
-            <StatusCard
-              stats={state.stats}
-              maxDelaySec={state.config.maxDelaySec}
-            />
-            <ControlPanel
-              minDelayValue={minDelayValue}
-              maxDelayValue={maxDelayValue}
-              onMinDelayChange={setMinDelayValue}
-              onMaxDelayChange={setMaxDelayValue}
-              running={running}
-              busy={busy}
-              onStart={() => void handleStart()}
-              onStop={() => void handleStop('normal')}
-              onEmergency={() => void handleStop('emergency')}
-            />
-            <StatsGrid stats={state.stats} />
-            <RotationEditor
-              rotation={state.config.rotation}
-              disabled={running}
-              onToggle={(id) => void handleToggle(id)}
-            />
-            <LogViewer logs={logs} />
-            <p className="pb-4 text-center text-xs text-slate-400">
-              Gunakan split-screen: Discord di atas, dashboard di bawah.
+    <div className="min-h-screen font-sans">
+      <Sidebar active={activeNav} onNavigate={handleNavigate} />
+      <MobileLogo />
+      <MobileNav active={activeNav} onNavigate={handleNavigate} />
+
+      <div className="lg:pl-64">
+        <header className="flex flex-wrap items-end justify-between gap-3 px-4 pt-6 pb-2 lg:px-8 lg:pt-8">
+          <div>
+            <h1 className="text-2xl font-extrabold tracking-tight text-ink">
+              Dashboard
+            </h1>
+            <p className="mt-0.5 text-sm text-ink-2">
+              Kontrol sesi macro OwO — jalan lokal di HP kamu
             </p>
-          </>
-        ) : (
-          <p className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">
-            Menghubungkan ke server…
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="chip">adapter: {state?.adapter ?? '…'}</span>
+            <span className="chip">
+              <span
+                className={`inline-block h-1.5 w-1.5 rounded-pill ${
+                  connected ? 'bg-live dot-live' : 'bg-ink-3'
+                }`}
+              />
+              {connected ? 'live' : 'reconnect'}
+            </span>
+          </div>
+        </header>
+
+        <main className="mx-auto max-w-2xl space-y-4 px-4 pt-4 pb-10 lg:max-w-3xl lg:px-8">
+          <Banner message={actionError} sseDown={!connected} />
+          {state ? (
+            <>
+              <StatusCard
+                stats={state.stats}
+                maxDelaySec={state.config.maxDelaySec}
+              />
+              <ControlPanel
+                minDelayValue={minDelayValue}
+                maxDelayValue={maxDelayValue}
+                onMinDelayChange={setMinDelayValue}
+                onMaxDelayChange={setMaxDelayValue}
+                running={running}
+                busy={busy}
+                onStart={() => void handleStart()}
+                onStop={() => void handleStop('normal')}
+                onEmergency={() => void handleStop('emergency')}
+              />
+              <div id="statistik" className="scroll-mt-24">
+                <StatsGrid stats={state.stats} />
+              </div>
+              <RotationEditor
+                rotation={state.config.rotation}
+                disabled={running}
+                onToggle={(id) => void handleToggle(id)}
+              />
+              <LogViewer logs={logs} />
+              <Diagnostik />
+            </>
+          ) : (
+            <section className="card">
+              <p className="text-sm text-ink-2">Menghubungkan ke server…</p>
+            </section>
+          )}
+          <p className="pt-2 text-center text-xs text-ink-3">
+            Gunakan split-screen: Discord di atas, dashboard di bawah.
           </p>
-        )}
-      </main>
+        </main>
+      </div>
     </div>
   );
 }

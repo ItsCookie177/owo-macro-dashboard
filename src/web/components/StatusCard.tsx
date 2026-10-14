@@ -1,16 +1,11 @@
 import { useEffect, useState } from 'react';
+import { AlertTriangle } from 'lucide-react';
 import type { Stats } from '../../shared/types';
 
 const STATUS_LABEL: Record<Stats['status'], string> = {
   idle: 'IDLE',
-  running: 'RUNNING',
+  running: 'BERJALAN',
   error: 'ERROR',
-};
-
-const STATUS_DOT: Record<Stats['status'], string> = {
-  idle: 'bg-slate-400',
-  running: 'bg-green-500',
-  error: 'bg-red-500',
 };
 
 function formatDuration(ms: number): string {
@@ -26,61 +21,101 @@ type Props = {
 };
 
 export default function StatusCard({ stats, maxDelaySec }: Props) {
+  const status = stats.status;
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
-    if (stats.status !== 'running') return;
+    if (status !== 'running') return;
     const t = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(t);
-  }, [stats.status]);
+  }, [status]);
 
-  const duration =
-    stats.status === 'running' && stats.startedAt
-      ? formatDuration(now - Date.parse(stats.startedAt))
-      : '--:--';
+  const dotClass =
+    status === 'running'
+      ? 'bg-live dot-live'
+      : status === 'error'
+        ? 'bg-accent'
+        : 'bg-ink-3';
 
-  let countdown: string | null = null;
-  if (stats.status === 'running') {
-    if (stats.nextAt) {
-      // Target pasti dari server (clock sama saat dibuka di HP yang sama;
-      // di PC bisa meleset ~1 dtk karena selisih jam — masih akurat).
-      const left = Math.max(0, Math.ceil((Date.parse(stats.nextAt) - now) / 1000));
-      countdown = left > 0 ? `dalam ~${left}s` : 'segera';
-    } else if (stats.lastSentAt) {
-      const elapsed = (now - Date.parse(stats.lastSentAt)) / 1000;
-      const left = Math.max(0, Math.ceil(maxDelaySec - elapsed));
-      countdown = `maks ~${left}s`;
-    }
-  }
+  const pillClass =
+    status === 'running'
+      ? 'bg-accent-soft text-accent-ink'
+      : status === 'error'
+        ? 'bg-danger-soft text-danger-ink'
+        : 'bg-base text-ink-2';
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-4">
+    <section id="sesi" className="card scroll-mt-24">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span
-            className={`inline-block h-2.5 w-2.5 rounded-full ${
-              STATUS_DOT[stats.status]
-            }`}
-          />
-          <span className="text-sm font-semibold tracking-wide">
-            {STATUS_LABEL[stats.status]}
+        <span
+          className={`inline-flex items-center gap-2 rounded-pill px-3 py-1 text-xs font-bold tracking-wide ${pillClass}`}
+        >
+          <span className={`inline-block h-2 w-2 rounded-pill ${dotClass}`} />
+          {STATUS_LABEL[status]}
+        </span>
+        {status === 'running' && stats.startedAt && (
+          <span className="font-mono text-sm text-ink-2 tabular-nums">
+            Durasi {formatDuration(now - Date.parse(stats.startedAt))}
           </span>
-        </div>
-        <span className="text-sm text-slate-600">Durasi {duration}</span>
-      </div>
-      <p className="mt-2 text-sm text-slate-700">
-        {stats.status === 'running' ? (
-          <>
-            Berikutnya:{' '}
-            <strong>{stats.nextCommandId ?? '—'}</strong>
-            {countdown && <span className="text-slate-500"> ({countdown})</span>}
-          </>
-        ) : stats.status === 'error' ? (
-          <span className="text-red-600">{stats.lastError ?? 'Terjadi error'}</span>
-        ) : (
-          <span className="text-slate-500">Siap dijalankan</span>
         )}
-      </p>
+      </div>
+
+      {status === 'error' && stats.lastError ? (
+        <div className="mt-4 flex items-start gap-2.5 rounded-[10px] border border-danger-line bg-danger-soft px-3.5 py-3 text-sm text-danger-ink">
+          <AlertTriangle size={18} className="mt-0.5 flex-none" />
+          <span>{stats.lastError}</span>
+        </div>
+      ) : (
+        <div className="mt-4">
+          <p className="text-[0.7rem] font-bold tracking-[0.14em] text-ink-3 uppercase">
+            Berikutnya
+          </p>
+          <div className="mt-1 flex flex-wrap items-baseline gap-x-4 gap-y-1">
+            <span className="font-mono text-3xl font-semibold text-ink sm:text-[2.1rem]">
+              {status === 'running' ? (stats.nextCommandId ?? '—') : '—'}
+            </span>
+            {status === 'running' && (
+              <CountdownBadge stats={stats} maxDelaySec={maxDelaySec} now={now} />
+            )}
+          </div>
+        </div>
+      )}
     </section>
+  );
+}
+
+function CountdownBadge({
+  stats,
+  maxDelaySec,
+  now,
+}: {
+  stats: Stats;
+  maxDelaySec: number;
+  now: number;
+}) {
+  if (stats.nextAt) {
+    const left = Math.max(
+      0,
+      Math.ceil((Date.parse(stats.nextAt) - now) / 1000),
+    );
+    return (
+      <span className="rounded-pill bg-accent-soft px-2.5 py-1 font-mono text-sm font-semibold text-accent-ink tabular-nums">
+        {left > 0 ? `${left}s lagi` : 'segera'}
+      </span>
+    );
+  }
+  if (stats.lastSentAt) {
+    const elapsed = (now - Date.parse(stats.lastSentAt)) / 1000;
+    const left = Math.max(0, Math.ceil(maxDelaySec - elapsed));
+    return (
+      <span className="rounded-pill bg-base px-2.5 py-1 font-mono text-sm text-ink-2 tabular-nums">
+        maks ~{left}s
+      </span>
+    );
+  }
+  return (
+    <span className="rounded-pill bg-base px-2.5 py-1 font-mono text-sm text-ink-3">
+      mulai…
+    </span>
   );
 }

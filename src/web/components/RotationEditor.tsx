@@ -1,3 +1,4 @@
+import { Shuffle } from 'lucide-react';
 import type { CommandDef } from '../../shared/types';
 
 type Props = {
@@ -8,35 +9,39 @@ type Props = {
 
 export default function RotationEditor({ rotation, disabled, onToggle }: Props) {
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-4">
-      <h2 className="text-sm font-medium text-slate-700">Rotasi Command</h2>
-      <ul className="mt-2 space-y-2">
+    <section id="rotasi" className="card scroll-mt-24">
+      <h2 className="card-title">
+        <Shuffle size={19} /> Rotasi Command
+      </h2>
+      <ul className="mt-3 divide-y divide-line">
         {rotation.map((cmd) => (
-          <li key={cmd.id} className="flex items-center gap-3">
+          <li key={cmd.id} className="flex items-center gap-3 py-2.5">
             <input
               type="checkbox"
               id={`cmd-${cmd.id}`}
               checked={cmd.enabled}
               disabled={disabled}
               onChange={() => onToggle(cmd.id)}
-              className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:opacity-40"
+              className="switch"
             />
             <label
               htmlFor={`cmd-${cmd.id}`}
-              className={`flex-1 text-sm ${
-                cmd.enabled ? 'text-slate-800' : 'text-slate-400 line-through'
+              className={`flex-1 cursor-pointer font-mono text-sm ${
+                cmd.enabled ? 'text-ink' : 'text-ink-3 line-through'
               }`}
             >
               {cmd.text}
             </label>
-            <span className="text-xs text-slate-500">
-              {cmd.maxPerSession === null ? '∞' : `limit ${cmd.maxPerSession}`}
+            <span
+              className={`chip ${cmd.maxPerSession === null ? '' : 'chip-accent'}`}
+            >
+              {cmd.maxPerSession === null ? '∞' : `${cmd.maxPerSession}×`}
             </span>
           </li>
         ))}
       </ul>
       {disabled && (
-        <p className="mt-2 text-xs text-slate-400">
+        <p className="mt-2 text-xs text-ink-3">
           Berhenti dulu untuk mengubah rotasi.
         </p>
       )}

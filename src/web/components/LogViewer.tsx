@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
+import { ScrollText } from 'lucide-react';
 import type { LogEntry } from '../../shared/types';
 
 const LEVEL_STYLE: Record<LogEntry['level'], string> = {
-  info: 'text-slate-700',
-  warn: 'text-amber-700',
-  error: 'text-red-700',
+  info: 'text-[#cfc4b4]',
+  warn: 'text-[#e8b86a]',
+  error: 'text-[#f0907e]',
 };
 
 function formatTime(ts: string): string {
@@ -29,19 +30,22 @@ export default function LogViewer({ logs }: Props) {
   function handleScroll() {
     const box = boxRef.current;
     if (!box) return;
-    const nearBottom =
-      box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+    const nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
     setFollow(nearBottom);
   }
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-4">
+    <section id="log" className="card scroll-mt-24">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-medium text-slate-700">Log</h2>
+        <h2 className="card-title">
+          <ScrollText size={19} /> Log
+        </h2>
         <button
           type="button"
           onClick={() => setFollow((f) => !f)}
-          className="rounded border border-slate-200 px-2 py-0.5 text-xs text-slate-600 hover:bg-slate-50"
+          className={`chip cursor-pointer transition-colors hover:bg-base ${
+            follow ? 'chip-accent' : ''
+          }`}
         >
           {follow ? 'Ikuti: on' : 'Ikuti: off'}
         </button>
@@ -49,14 +53,15 @@ export default function LogViewer({ logs }: Props) {
       <div
         ref={boxRef}
         onScroll={handleScroll}
-        className="mt-2 h-56 overflow-y-auto rounded-lg bg-slate-50 p-2 font-mono text-xs leading-relaxed"
+        className="mt-3 h-56 overflow-y-auto rounded-[10px] bg-[#24201c] p-3 font-mono text-xs leading-relaxed"
       >
         {logs.length === 0 ? (
-          <p className="text-slate-400">Belum ada aktivitas.</p>
+          <p className="text-[#8a8074]">Belum ada aktivitas.</p>
         ) : (
           logs.map((entry, i) => (
             <div key={`${entry.ts}-${i}`} className={LEVEL_STYLE[entry.level]}>
-              {formatTime(entry.ts)} {entry.level} {entry.msg}
+              <span className="text-[#8a8074]">{formatTime(entry.ts)}</span>{' '}
+              {entry.msg}
             </div>
           ))
         )}

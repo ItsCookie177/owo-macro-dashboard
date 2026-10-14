@@ -55,3 +55,18 @@ export function stopSession(mode: 'normal' | 'emergency'): Promise<{ ok: true }>
 export function putConfig(config: ConfigInput): Promise<StateResponse['config']> {
   return api('/api/config', { method: 'PUT', body: JSON.stringify(config) });
 }
+
+export type ProbeResult = {
+  ok: boolean;
+  adapter: string;
+  foreground?: boolean;
+  visible?: boolean;
+  dumpOk?: boolean;
+  composerId?: string | null;
+  hint?: string;
+  reason?: string;
+};
+
+export function probe(): Promise<ProbeResult> {
+  return api('/api/probe', { method: 'POST' });
+}
