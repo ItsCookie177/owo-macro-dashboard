@@ -6,7 +6,11 @@ import ControlPanel from './components/ControlPanel';
 import Diagnostik from './components/Diagnostik';
 import LogViewer from './components/LogViewer';
 import RotationEditor from './components/RotationEditor';
-import Sidebar, { MobileLogo, MobileNav } from './components/Sidebar';
+import Sidebar, {
+  MobileTopbar,
+  PAGE_META,
+  type PageId,
+} from './components/Sidebar';
 import StatsGrid from './components/StatsGrid';
 import StatusCard from './components/StatusCard';
 import {
@@ -19,6 +23,18 @@ import {
 import { useEventStream } from './hooks/useEventStream';
 
 const MAX_LOGS = 500;
+const PAGE_IDS: PageId[] = [
+  'dashboard',
+  'rotasi',
+  'statistik',
+  'log',
+  'diagnostik',
+];
+
+function pageFromHash(hash: string): PageId {
+  const id = hash.replace(/^#\/?/, '') as PageId;
+  return PAGE_IDS.includes(id) ? id : 'dashboard';
+}
 
 export default function App() {
   const [state, setState] = useState<StateResponse | null>(null);
@@ -28,8 +44,32 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [minDelayValue, setMinDelayValue] = useState('22');
   const [maxDelayValue, setMaxDelayValue] = useState('48');
-  const [activeNav, setActiveNav] = useState('sesi');
+  const [page, setPage] = useState<PageId>(() =>
+    pageFromHash(window.location.hash),
+  );
   const initialized = useRef(false);
+
+  // Sinkronkan halaman dengan hash URL (back/forward browser ikut jalan).
+  useEffect(() => {
+    function onHashChange() {
+      setPage(pageFromHash(window.location.hash));
+    }
+    window.addEventListener('hashchange', onHashChange);
+    if (!window.location.hash) {
+      window.history.replaceState(null, '', '#dashboard');
+    }
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
+
+  function handleNavigate(id: PageId) {
+    if (id === page) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    window.location.hash = id;
+    setPage(id);
+    window.scrollTo({ top: 0 });
+  }
 
   const onState = useCallback((s: StateResponse) => {
     setState(s);
@@ -113,57 +153,34 @@ export default function App() {
     }
   }
 
-  function handleNavigate(id: string) {
-    setActiveNav(id);
-    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
-  }
-
-  // Nav aktif mengikuti section yang terlihat di viewport.
-  useEffect(() => {
-    const ids = ['sesi', 'rotasi', 'statistik', 'log', 'diagnostik'];
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) setActiveNav(entry.target.id);
-        }
-      },
-      { rootMargin: '-30% 0px -55% 0px' },
-    );
-    for (const id of ids) {
-      const el = document.getElementById(id);
-      if (el) observer.observe(el);
-    }
-    return () => observer.disconnect();
-  }, [state]);
-
   const running = state?.status === 'running';
+  const meta = PAGE_META[page];
 
   return (
     <div className="min-h-screen font-sans">
-      <Sidebar active={activeNav} onNavigate={handleNavigate} />
-      <MobileLogo />
-      <MobileNav active={activeNav} onNavigate={handleNavigate} />
+      <Sidebar page={page} onNavigate={handleNavigate} />
+      <MobileTopbar page={page} onNavigate={handleNavigate} />
 
       <div className="lg:pl-64">
-        <header className="flex flex-wrap items-end justify-between gap-3 px-4 pt-6 pb-2 lg:px-8 lg:pt-8">
-          <div>
-            <h1 className="text-2xl font-extrabold tracking-tight text-ink">
-              Dashboard
-            </h1>
-            <p className="mt-0.5 text-sm text-ink-2">
-              Kontrol sesi macro OwO — jalan lokal di HP kamu
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="chip">adapter: {state?.adapter ?? '…'}</span>
-            <span className="chip">
-              <span
-                className={`inline-block h-1.5 w-1.5 rounded-pill ${
-                  connected ? 'bg-live dot-live' : 'bg-ink-3'
-                }`}
-              />
-              {connected ? 'live' : 'reconnect'}
-            </span>
+        <header className="sticky top-0 z-20 border-b border-line bg-base/75 px-4 pt-5 pb-3 backdrop-blur-[4px] lg:px-8 lg:pt-6">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h1 className="text-2xl font-extrabold tracking-tight text-ink">
+                {meta.title}
+              </h1>
+              <p className="mt-0.5 text-sm text-ink-2">{meta.subtitle}</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="chip">adapter: {state?.adapter ?? '…'}</span>
+              <span className="chip">
+                <span
+                  className={`inline-block h-1.5 w-1.5 rounded-pill ${
+                    connected ? 'bg-live dot-live' : 'bg-ink-3'
+                  }`}
+                />
+                {connected ? 'live' : 'reconnect'}
+              </span>
+            </div>
           </div>
         </header>
 
@@ -171,31 +188,35 @@ export default function App() {
           <Banner message={actionError} sseDown={!connected} />
           {state ? (
             <>
-              <StatusCard
-                stats={state.stats}
-                maxDelaySec={state.config.maxDelaySec}
-              />
-              <ControlPanel
-                minDelayValue={minDelayValue}
-                maxDelayValue={maxDelayValue}
-                onMinDelayChange={setMinDelayValue}
-                onMaxDelayChange={setMaxDelayValue}
-                running={running}
-                busy={busy}
-                onStart={() => void handleStart()}
-                onStop={() => void handleStop('normal')}
-                onEmergency={() => void handleStop('emergency')}
-              />
-              <div id="statistik" className="scroll-mt-24">
-                <StatsGrid stats={state.stats} />
-              </div>
-              <RotationEditor
-                rotation={state.config.rotation}
-                disabled={running}
-                onToggle={(id) => void handleToggle(id)}
-              />
-              <LogViewer logs={logs} />
-              <Diagnostik />
+              {page === 'dashboard' && (
+                <>
+                  <StatusCard
+                    stats={state.stats}
+                    maxDelaySec={state.config.maxDelaySec}
+                  />
+                  <ControlPanel
+                    minDelayValue={minDelayValue}
+                    maxDelayValue={maxDelayValue}
+                    onMinDelayChange={setMinDelayValue}
+                    onMaxDelayChange={setMaxDelayValue}
+                    running={running}
+                    busy={busy}
+                    onStart={() => void handleStart()}
+                    onStop={() => void handleStop('normal')}
+                    onEmergency={() => void handleStop('emergency')}
+                  />
+                </>
+              )}
+              {page === 'rotasi' && (
+                <RotationEditor
+                  rotation={state.config.rotation}
+                  disabled={running}
+                  onToggle={(id) => void handleToggle(id)}
+                />
+              )}
+              {page === 'statistik' && <StatsGrid stats={state.stats} />}
+              {page === 'log' && <LogViewer logs={logs} />}
+              {page === 'diagnostik' && <Diagnostik />}
             </>
           ) : (
             <section className="card">

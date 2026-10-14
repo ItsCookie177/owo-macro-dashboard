@@ -1,11 +1,19 @@
-import { BarChart3, Gauge, PawPrint, ScrollText, Shuffle } from 'lucide-react';
+import { BarChart3, Gauge, PawPrint, Radar, ScrollText, Shuffle } from 'lucide-react';
 
-const NAV = [
-  { id: 'sesi', label: 'Sesi', icon: Gauge },
+export type PageId =
+  | 'dashboard'
+  | 'rotasi'
+  | 'statistik'
+  | 'log'
+  | 'diagnostik';
+
+const NAV: { id: PageId; label: string; icon: typeof Gauge }[] = [
+  { id: 'dashboard', label: 'Dashboard', icon: Gauge },
   { id: 'rotasi', label: 'Rotasi', icon: Shuffle },
   { id: 'statistik', label: 'Statistik', icon: BarChart3 },
   { id: 'log', label: 'Log', icon: ScrollText },
-] as const;
+  { id: 'diagnostik', label: 'Diagnostik', icon: Radar },
+];
 
 function Logo() {
   return (
@@ -24,28 +32,26 @@ function Logo() {
 }
 
 type Props = {
-  active: string;
-  onNavigate: (id: string) => void;
+  page: PageId;
+  onNavigate: (id: PageId) => void;
 };
 
-export default function Sidebar({ active, onNavigate }: Props) {
+export default function Sidebar({ page, onNavigate }: Props) {
   return (
-    <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 flex-col border-r border-line bg-surface px-4 py-6 lg:flex">
+    <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-line bg-surface px-4 py-6 lg:flex">
       <Logo />
       <nav className="mt-8 space-y-1">
         {NAV.map(({ id, label, icon: Icon }) => (
-          <a
+          <button
             key={id}
-            href={`#${id}`}
-            onClick={(e) => {
-              e.preventDefault();
-              onNavigate(id);
-            }}
-            className={`nav-item ${active === id ? 'nav-item-active' : ''}`}
+            type="button"
+            onClick={() => onNavigate(id)}
+            aria-current={page === id ? 'page' : undefined}
+            className={`nav-item w-full ${page === id ? 'nav-item-active' : ''}`}
           >
             <Icon size={18} />
             {label}
-          </a>
+          </button>
         ))}
       </nav>
       <p className="mt-auto text-[0.7rem] leading-relaxed text-ink-3">
@@ -55,39 +61,54 @@ export default function Sidebar({ active, onNavigate }: Props) {
   );
 }
 
-export function MobileNav({
-  active,
-  onNavigate,
-}: {
-  active: string;
-  onNavigate: (id: string) => void;
-}) {
+export function MobileTopbar({ page, onNavigate }: Props) {
   return (
-    <nav className="flex gap-1.5 overflow-x-auto px-4 pt-3 pb-1 lg:hidden">
-      {NAV.map(({ id, label, icon: Icon }) => (
-        <a
-          key={id}
-          href={`#${id}`}
-          onClick={(e) => {
-            e.preventDefault();
-            onNavigate(id);
-          }}
-          className={`chip flex-none cursor-pointer ${
-            active === id ? 'chip-accent' : ''
-          }`}
-        >
-          <Icon size={13} />
-          {label}
-        </a>
-      ))}
-    </nav>
-  );
-}
-
-export function MobileLogo() {
-  return (
-    <div className="flex items-center justify-between border-b border-line bg-surface px-4 py-3 lg:hidden">
-      <Logo />
+    <div className="sticky top-0 z-30 border-b border-line bg-base/75 backdrop-blur-[4px] lg:hidden">
+      <div className="flex items-center justify-between px-4 py-3">
+        <Logo />
+      </div>
+      <nav className="flex gap-1.5 overflow-x-auto px-4 pb-2.5">
+        {NAV.map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => onNavigate(id)}
+            aria-current={page === id ? 'page' : undefined}
+            className={`chip flex-none cursor-pointer ${
+              page === id ? 'chip-accent' : ''
+            }`}
+          >
+            <Icon size={13} />
+            {label}
+          </button>
+        ))}
+      </nav>
     </div>
   );
 }
+
+export const PAGE_META: Record<
+  PageId,
+  { title: string; subtitle: string }
+> = {
+  dashboard: {
+    title: 'Dashboard',
+    subtitle: 'Kendali sesi macro OwO — jalan lokal di HP kamu',
+  },
+  rotasi: {
+    title: 'Rotasi Command',
+    subtitle: 'Aktifkan/matiakan command dan batas penggunaan per sesi',
+  },
+  statistik: {
+    title: 'Statistik Sesi',
+    subtitle: 'Jumlah command terkirim per jenis sejak sesi dimulai',
+  },
+  log: {
+    title: 'Log Aktivitas',
+    subtitle: 'Riwayat event scheduler, adapter, dan kesalahan',
+  },
+  diagnostik: {
+    title: 'Diagnostik',
+    subtitle: 'Cek adapter, focus Discord, dan deteksi kolom chat',
+  },
+};
