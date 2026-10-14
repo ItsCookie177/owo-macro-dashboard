@@ -40,10 +40,17 @@ export default function StatusCard({ stats, maxDelaySec }: Props) {
       : '--:--';
 
   let countdown: string | null = null;
-  if (stats.status === 'running' && stats.lastSentAt) {
-    const elapsed = (now - Date.parse(stats.lastSentAt)) / 1000;
-    const left = Math.max(0, Math.ceil(maxDelaySec - elapsed));
-    countdown = `maks ~${left}s`;
+  if (stats.status === 'running') {
+    if (stats.nextAt) {
+      // Target pasti dari server (clock sama saat dibuka di HP yang sama;
+      // di PC bisa meleset ~1 dtk karena selisih jam — masih akurat).
+      const left = Math.max(0, Math.ceil((Date.parse(stats.nextAt) - now) / 1000));
+      countdown = left > 0 ? `dalam ~${left}s` : 'segera';
+    } else if (stats.lastSentAt) {
+      const elapsed = (now - Date.parse(stats.lastSentAt)) / 1000;
+      const left = Math.max(0, Math.ceil(maxDelaySec - elapsed));
+      countdown = `maks ~${left}s`;
+    }
   }
 
   return (

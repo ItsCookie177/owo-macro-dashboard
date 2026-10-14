@@ -227,6 +227,34 @@ describe('Scheduler', () => {
     expect(adapter.wakeRestored).toBe(1);
   });
 
+  it('nextAt terisi untuk countdown akurat di dashboard', async () => {
+    const adapter = new MockAdapter();
+    const config = testConfig({
+      minDelaySec: 15,
+      maxDelaySec: 20,
+      rotation: [
+        { id: 'hunt', text: 'owo hunt', enabled: true, maxPerSession: null },
+      ],
+    });
+    const session = new Session();
+    const scheduler = new Scheduler({
+      adapter,
+      configStore: { get: () => config } as unknown as ConfigStore,
+      session,
+      logger: new Logger(),
+      sleepFn: (_ms, signal) => sleep(5000, signal),
+      firstDelayMs: 0,
+    });
+    await scheduler.start();
+    await waitFor(() => session.snapshot().nextAt !== null);
+    const nextAt = Date.parse(session.snapshot().nextAt!);
+    const delta = nextAt - Date.now();
+    expect(delta).toBeGreaterThan(14_000);
+    expect(delta).toBeLessThanOrEqual(20_000);
+    await scheduler.stop('normal');
+    expect(session.snapshot().nextAt).toBeNull();
+  });
+
   it('verifikasi human di layar -> auto-stop + error', async () => {
     const adapter = new MockAdapter();
     adapter.screenText =

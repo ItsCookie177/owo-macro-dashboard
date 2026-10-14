@@ -22,6 +22,8 @@ export interface Stats {
   totalSent: number;
   perCommand: Record<string, number>;
   nextCommandId: string | null;
+  /** Target waktu kirim berikutnya (ISO, clock server) — untuk countdown akurat. */
+  nextAt: string | null;
   lastError: string | null;
 }
 

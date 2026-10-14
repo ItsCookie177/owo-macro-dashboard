@@ -254,10 +254,9 @@ export class Scheduler {
         }
 
         const upcoming = nextCommand(config.rotation, counts, idx);
-        session.markNext(upcoming ? upcoming.cmd.id : null);
-
         nextSendAt =
           now() + computeDelayMs(config.minDelaySec, config.maxDelaySec, random);
+        session.markNext(upcoming ? upcoming.cmd.id : null, nextSendAt);
       }
     } finally {
       try {

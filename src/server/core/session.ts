@@ -9,6 +9,7 @@ function idleStats(): Stats {
     totalSent: 0,
     perCommand: {},
     nextCommandId: null,
+    nextAt: null,
     lastError: null,
   };
 }
@@ -28,13 +29,17 @@ export class Session extends EventEmitter {
       totalSent: 0,
       perCommand: {},
       nextCommandId: null,
+      nextAt: null,
       lastError: null,
     };
     this.emit('update');
   }
 
-  markNext(id: string | null): void {
+  markNext(id: string | null, nextAtMs?: number): void {
     this.stats.nextCommandId = id;
+    if (nextAtMs !== undefined) {
+      this.stats.nextAt = new Date(nextAtMs).toISOString();
+    }
     this.emit('update');
   }
 
@@ -54,6 +59,7 @@ export class Session extends EventEmitter {
   end(status: Status = 'idle'): void {
     this.stats.status = status;
     this.stats.nextCommandId = null;
+    this.stats.nextAt = null;
     this.stats.lastSentAt = null;
     this.emit('update');
   }
