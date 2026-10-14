@@ -1,0 +1,36 @@
+{
+  "brand": "OwO Macro",
+  "tagline": "Dashboard macro OwO yang hangat",
+  "brief": "Dashboard lokal untuk mengendalikan macro game Discord (OwO Bot) lewat automasi UI di HP. Terlihat oleh pemain muda yang ingin kontrol penuh tanpa cloud — harus hangat, jujur, dan mudah dipakai, bukan keras korporat.",
+  "adjectives": ["hangat", "jujur", "main-main", "sederhana"],
+  "criteria": "Berhasil: jelas di 16 px, jalan satu warna, beda dari kesan biru dingin kategori developer tool, dan terasa seperti milik sendiri di atas latar krem.",
+  "industry": "developer-tools",
+  "nav": ["Dashboard", "Rotasi", "Log"],
+  "brand_color": "#E8622C",
+  "greyscale": false,
+  "final": true,
+  "round": 2,
+  "tile_color": "#E8622C",
+  "concepts": [
+    {
+      "name": "Wink",
+      "symbol": "symbol.svg",
+      "lockup": "horizontal.svg",
+      "stacked": "stacked.svg",
+      "symbol_on_tile": "variants/owo-symbol-app-icon.svg",
+      "lockup_on_dark": "variants/owo-horizontal-white.svg",
+      "idea": "Huruf O–w–O yang langsung terbaca wajah: logo menyebut namanya sendiri.",
+      "rationale": [
+        "Satu bentuk yang diingat dalam satu detik — dari favicon 16 px sampai header",
+        "Hangat dan main-main, cocok dengan krem-graph paper + aksen coral",
+        "Satu warna tetap bekerja: mata cincin dan mulut zigzag tidak pernah menyatu",
+        "Bebas dari kategori: tanpa biru, tanpa roda gigi, tanpa panah naik"
+      ]
+    }
+  ],
+  "recommendation": "Wink — arah terpilih. Paling cepat dikenali, satu-satunya yang bekerja penuh dari tab browser sampai headline, dan menjadi sistem: ikon, avatar, app icon, serta pola zigzag untuk elemen UI.",
+  "next_steps": [
+    "Terapkan ke website (logo header + favicon)",
+    "Kalau perlu variasi warna atau lockup lain, tinggal bilang"
+  ]
+}

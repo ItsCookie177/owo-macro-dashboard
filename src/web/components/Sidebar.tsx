@@ -1,4 +1,4 @@
-import { BarChart3, Gauge, PawPrint, Radar, ScrollText, Shuffle } from 'lucide-react';
+import { BarChart3, Gauge, Radar, ScrollText, Shuffle } from 'lucide-react';
 
 export type PageId =
   | 'dashboard'
@@ -19,7 +19,23 @@ function Logo() {
   return (
     <div className="flex items-center gap-3">
       <span className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-accent text-white">
-        <PawPrint size={22} />
+        <svg
+          viewBox="0 0 256 256"
+          className="h-[26px] w-[26px]"
+          fill="none"
+          aria-hidden="true"
+        >
+          <g
+            stroke="currentColor"
+            strokeWidth="17"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <circle cx="78" cy="99" r="35" />
+            <circle cx="178" cy="99" r="35" />
+            <path d="M 92 163 L 110 194.2 L 128 163 L 146 194.2 L 164 163" />
+          </g>
+        </svg>
       </span>
       <div>
         <p className="text-[0.95rem] leading-tight font-extrabold text-ink">

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none"><title>OwO Macro</title>
+  
+  <g stroke="#000000" stroke-width="17" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="78" cy="99" r="35"/>
+    <circle cx="178" cy="99" r="35"/>
+    <path d="M 92 163 L 110 194.2 L 128 163 L 146 194.2 L 164 163"/>
+  </g>
+</svg>
