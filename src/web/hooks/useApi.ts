@@ -66,8 +66,14 @@ export function getPresets(): Promise<Preset[]> {
   return api('/api/presets');
 }
 
-export function savePreset(name: string): Promise<Preset> {
-  return api('/api/presets', { method: 'POST', body: JSON.stringify({ name }) });
+export function savePreset(
+  name: string,
+  config?: ConfigInput,
+): Promise<Preset> {
+  return api('/api/presets', {
+    method: 'POST',
+    body: JSON.stringify(config ? { name, config } : { name }),
+  });
 }
 
 export function deletePreset(name: string): Promise<{ ok: true }> {

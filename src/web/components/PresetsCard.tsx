@@ -1,5 +1,12 @@
-import { useState } from 'react';
-import { BookmarkPlus, Download, Save, Trash2 } from 'lucide-react';
+import { useRef, useState } from 'react';
+import {
+  BookmarkPlus,
+  Download,
+  FileDown,
+  FileUp,
+  Save,
+  Trash2,
+} from 'lucide-react';
 import type { Preset } from '../hooks/useApi';
 
 type Props = {
@@ -8,6 +15,8 @@ type Props = {
   onSave: (name: string) => void | Promise<void>;
   onLoad: (preset: Preset) => void | Promise<void>;
   onDelete: (name: string) => void | Promise<void>;
+  onExport: () => void;
+  onImport: (file: File) => void | Promise<void>;
 };
 
 function shortDate(iso: string): string {
@@ -27,8 +36,11 @@ export default function PresetsCard({
   onSave,
   onLoad,
   onDelete,
+  onExport,
+  onImport,
 }: Props) {
   const [name, setName] = useState('');
+  const fileRef = useRef<HTMLInputElement>(null);
 
   function submit() {
     const clean = name.trim();
@@ -70,6 +82,38 @@ export default function PresetsCard({
           <Save size={16} /> Simpan
         </button>
       </form>
+
+      <div className="mt-2 flex items-center gap-2">
+        <button
+          type="button"
+          className="btn btn-ghost !px-2.5 !py-1 text-xs"
+          disabled={disabled}
+          title="Impor preset dari file JSON"
+          onClick={() => fileRef.current?.click()}
+        >
+          <FileUp size={14} /> Import
+        </button>
+        <button
+          type="button"
+          className="btn btn-ghost !px-2.5 !py-1 text-xs"
+          disabled={disabled || presets.length === 0}
+          title="Ekspor semua preset ke file JSON"
+          onClick={onExport}
+        >
+          <FileDown size={14} /> Export
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".json,application/json"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) void onImport(file);
+            e.target.value = '';
+          }}
+        />
+      </div>
 
       {presets.length === 0 ? (
         <p className="mt-3 text-xs text-ink-3">Belum ada preset tersimpan.</p>

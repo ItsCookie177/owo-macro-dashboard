@@ -10,6 +10,7 @@ type Props = {
   onToggle: (id: string) => void;
   onShuffleToggle: (value: boolean) => void;
   onAmountChange: (id: string, amount: number | null) => void;
+  onMaxChange: (id: string, maxPerSession: number | null) => void;
   onDelete: (id: string) => void;
   onAdd: (text: string, amount: number | null) => void;
 };
@@ -21,20 +22,32 @@ export default function RotationEditor({
   onToggle,
   onShuffleToggle,
   onAmountChange,
+  onMaxChange,
   onDelete,
   onAdd,
 }: Props) {
   const [newText, setNewText] = useState('');
 
-  function commitAmount(id: string, raw: string) {
+  function commitNumber(
+    raw: string,
+    commit: (value: number | null) => void,
+  ): void {
     const trimmed = raw.trim();
     if (!trimmed) {
-      onAmountChange(id, null);
+      commit(null);
       return;
     }
     const n = Math.floor(Number(trimmed));
     if (!Number.isFinite(n) || n < 1) return;
-    onAmountChange(id, Math.min(n, 10_000_000_000));
+    commit(Math.min(n, 10_000_000_000));
+  }
+
+  function commitAmount(id: string, raw: string) {
+    commitNumber(raw, (value) => onAmountChange(id, value));
+  }
+
+  function commitMax(id: string, raw: string) {
+    commitNumber(raw, (value) => onMaxChange(id, value));
   }
 
   function submitAdd() {
@@ -99,11 +112,21 @@ export default function RotationEditor({
                 className="input w-20 text-right font-mono text-xs"
               />
             )}
-            <span
-              className={`chip ${cmd.maxPerSession === null ? '' : 'chip-accent'}`}
-            >
-              {cmd.maxPerSession === null ? '∞' : `${cmd.maxPerSession}×`}
-            </span>
+            <input
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={10_000_000_000}
+              placeholder="∞"
+              title="Berapa kali per sesi (kosong = tanpa batas)"
+              disabled={disabled}
+              defaultValue={cmd.maxPerSession ?? ''}
+              onBlur={(e) => commitMax(cmd.id, e.currentTarget.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') commitMax(cmd.id, e.currentTarget.value);
+              }}
+              className="input w-16 text-center font-mono text-xs"
+            />
             <button
               type="button"
               className="btn btn-ghost !px-2 !py-1 text-ink-3 hover:!text-danger-ink"

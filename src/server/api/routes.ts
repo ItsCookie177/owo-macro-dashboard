@@ -28,6 +28,12 @@ const presetNameSchema = z.object({
   name: z.string().trim().min(1).max(40),
 });
 
+/** Simpan config server saat ini, atau config dari file (import). */
+const presetSaveSchema = z.object({
+  name: z.string().trim().min(1).max(40),
+  config: configSchema.optional(),
+});
+
 function zodMsg(err: z.ZodError): string {
   return err.issues
     .map((i) => (i.path.length ? `${i.path.join('.')}: ${i.message}` : i.message))
@@ -111,14 +117,17 @@ export function registerRoutes(app: Express, ctx: AppContext): void {
   });
 
   router.post('/presets', (req, res) => {
-    const parsed = presetNameSchema.safeParse(req.body ?? {});
+    const parsed = presetSaveSchema.safeParse(req.body ?? {});
     if (!parsed.success) {
       res.status(400).json({ error: zodMsg(parsed.error) });
       return;
     }
     try {
-      const { lanToken: _ignored, ...cfg } = configStore.get();
-      const preset = presets.save(parsed.data.name, cfg);
+      const { lanToken: _ignored, ...current } = configStore.get();
+      const preset = presets.save(
+        parsed.data.name,
+        parsed.data.config ?? current,
+      );
       logger.info(`preset disimpan: "${preset.name}"`);
       res.status(201).json(preset);
     } catch (e) {

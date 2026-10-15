@@ -17,6 +17,15 @@ describe('ConfigStore', () => {
     expect(store.get().maxDelaySec).toBe(48);
     expect(store.get().rotation).toHaveLength(4);
     expect(store.get().lanToken.length).toBeGreaterThanOrEqual(8);
+    // Default cmd uang: tanpa nominal & tanpa limit — user isi sendiri.
+    const cf = store.get().rotation.find((c) => c.id === 'cf');
+    expect(cf).toMatchObject({
+      text: 'owo coinflip head',
+      amount: null,
+      maxPerSession: null,
+    });
+    const slots = store.get().rotation.find((c) => c.id === 'slots');
+    expect(slots).toMatchObject({ amount: null, maxPerSession: null });
     const onDisk = JSON.parse(readFileSync(filePath, 'utf8'));
     expect(onDisk.minDelaySec).toBe(22);
   });

@@ -47,6 +47,29 @@ function newCommandId(): string {
   return `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
 }
 
+type ImportItem = { name: string; config: ConfigInput };
+
+/** Terima {presets:[…]}, array, atau objek preset tunggal. */
+function extractPresetItems(raw: unknown): ImportItem[] {
+  let arr: unknown[];
+  if (Array.isArray(raw)) {
+    arr = raw;
+  } else if (raw && typeof raw === 'object') {
+    const maybe = (raw as { presets?: unknown }).presets;
+    arr = Array.isArray(maybe) ? maybe : [raw];
+  } else {
+    return [];
+  }
+  const out: ImportItem[] = [];
+  for (const item of arr) {
+    if (!item || typeof item !== 'object') continue;
+    const { name, config } = item as { name?: unknown; config?: unknown };
+    if (typeof name !== 'string' || !name.trim() || !config) continue;
+    out.push({ name: name.trim().slice(0, 40), config: config as ConfigInput });
+  }
+  return out.slice(0, 50);
+}
+
 export default function App() {
   const [state, setState] = useState<StateResponse | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -194,6 +217,14 @@ export default function App() {
     return patchConfig({ rotation });
   }
 
+  function handleMaxChange(id: string, maxPerSession: number | null) {
+    if (!state) return;
+    const rotation = state.config.rotation.map((c) =>
+      c.id === id ? { ...c, maxPerSession } : c,
+    );
+    return patchConfig({ rotation });
+  }
+
   function handleDelete(id: string) {
     if (!state || state.config.rotation.length <= 1) return;
     return patchConfig({ rotation: state.config.rotation.filter((c) => c.id !== id) });
@@ -235,6 +266,45 @@ export default function App() {
       refreshPresets();
     } catch (e) {
       setActionError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  function handleExportPresets() {
+    const payload = {
+      app: 'owo-macro-dashboard',
+      kind: 'presets',
+      version: 1,
+      presets,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2) + '\n'], {
+      type: 'application/json',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `owo-preset-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function handleImportPresets(file: File) {
+    setActionError(null);
+    try {
+      const raw: unknown = JSON.parse(await file.text());
+      const items = extractPresetItems(raw);
+      if (items.length === 0) {
+        throw new Error('tidak ada preset valid di file');
+      }
+      for (const item of items) {
+        await savePreset(item.name, item.config);
+      }
+      refreshPresets();
+    } catch (e) {
+      setActionError(
+        e instanceof Error
+          ? `import gagal: ${e.message}`
+          : `import gagal: ${e}`,
+      );
     }
   }
 
@@ -312,6 +382,8 @@ export default function App() {
                     onSave={handleSavePreset}
                     onLoad={handleLoadPreset}
                     onDelete={handleDeletePreset}
+                    onExport={handleExportPresets}
+                    onImport={handleImportPresets}
                   />
                   <RotationEditor
                     rotation={state.config.rotation}
@@ -320,6 +392,7 @@ export default function App() {
                     onToggle={(id) => void handleToggle(id)}
                     onShuffleToggle={(v) => void handleShuffleToggle(v)}
                     onAmountChange={(id, a) => void handleAmountChange(id, a)}
+                    onMaxChange={(id, m) => void handleMaxChange(id, m)}
                     onDelete={(id) => void handleDelete(id)}
                     onAdd={(text, amount) => void handleAdd(text, amount)}
                   />
