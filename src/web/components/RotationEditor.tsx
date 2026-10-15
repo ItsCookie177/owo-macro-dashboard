@@ -106,7 +106,7 @@ export default function RotationEditor({
             </span>
             <button
               type="button"
-              className="btn-ghost !px-2 !py-1 text-ink-3 hover:!text-danger-ink"
+              className="btn btn-ghost !px-2 !py-1 text-ink-3 hover:!text-danger-ink"
               disabled={disabled || rotation.length <= 1}
               title="Hapus command"
               onClick={() => onDelete(cmd.id)}
@@ -134,7 +134,7 @@ export default function RotationEditor({
         />
         <button
           type="submit"
-          className="btn-primary whitespace-nowrap"
+          className="btn btn-primary whitespace-nowrap"
           disabled={disabled || !newText.trim()}
         >
           <Plus size={16} /> Tambah

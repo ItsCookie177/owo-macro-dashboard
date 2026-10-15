@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { BookmarkPlus, Download, Trash2 } from 'lucide-react';
+import { BookmarkPlus, Download, Save, Trash2 } from 'lucide-react';
 import type { Preset } from '../hooks/useApi';
 
 type Props = {
@@ -64,10 +64,10 @@ export default function PresetsCard({
         />
         <button
           type="submit"
-          className="btn-primary"
+          className="btn btn-primary"
           disabled={disabled || !name.trim()}
         >
-          Simpan
+          <Save size={16} /> Simpan
         </button>
       </form>
 
@@ -88,7 +88,7 @@ export default function PresetsCard({
               </div>
               <button
                 type="button"
-                className="btn-ghost !px-2.5 !py-1 text-xs"
+                className="btn btn-ghost !px-2.5 !py-1 text-xs"
                 disabled={disabled}
                 title="Muat preset ini"
                 onClick={() => void onLoad(p)}
@@ -97,7 +97,7 @@ export default function PresetsCard({
               </button>
               <button
                 type="button"
-                className="btn-ghost !px-2 !py-1 text-ink-3 hover:!text-danger-ink"
+                className="btn btn-ghost !px-2 !py-1 text-ink-3 hover:!text-danger-ink"
                 title="Hapus preset"
                 onClick={() => void onDelete(p.name)}
               >
