@@ -46,6 +46,8 @@ describe('configSchema', () => {
     expect(parsed.maxDelaySec).toBe(48);
     expect(parsed.breakEveryCmd).toBe(12);
     expect(parsed.startGraceSec).toBe(10);
+    expect(parsed.shuffleOrder).toBe(false);
+    expect(parsed.rotation[0].amount).toBeNull();
   });
 
   it('maxDelaySec < minDelaySec ditolak', () => {

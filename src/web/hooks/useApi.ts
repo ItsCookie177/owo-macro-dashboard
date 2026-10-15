@@ -56,6 +56,27 @@ export function putConfig(config: ConfigInput): Promise<StateResponse['config']>
   return api('/api/config', { method: 'PUT', body: JSON.stringify(config) });
 }
 
+export type Preset = {
+  name: string;
+  savedAt: string;
+  config: ConfigInput;
+};
+
+export function getPresets(): Promise<Preset[]> {
+  return api('/api/presets');
+}
+
+export function savePreset(name: string): Promise<Preset> {
+  return api('/api/presets', { method: 'POST', body: JSON.stringify({ name }) });
+}
+
+export function deletePreset(name: string): Promise<{ ok: true }> {
+  return api('/api/presets', {
+    method: 'DELETE',
+    body: JSON.stringify({ name }),
+  });
+}
+
 export type ProbeResult = {
   ok: boolean;
   adapter: string;

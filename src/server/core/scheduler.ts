@@ -57,6 +57,24 @@ export function sleep(ms: number, signal: AbortSignal): Promise<void> {
 
 type Picked = { cmd: CommandDef; offset: number };
 
+/** Teks final saat kirim: cmd uang → "text amount" (owo slots 100). */
+export function commandText(cmd: CommandDef): string {
+  const base = cmd.text.trim();
+  if (cmd.amount === null || cmd.amount === undefined) return base;
+  return `${base} ${cmd.amount}`;
+}
+
+function isEligible(cmd: CommandDef, counts: Record<string, number>): boolean {
+  if (!cmd.enabled) return false;
+  if (
+    cmd.maxPerSession !== null &&
+    (counts[cmd.id] ?? 0) >= cmd.maxPerSession
+  ) {
+    return false;
+  }
+  return true;
+}
+
 function nextCommand(
   rotation: CommandDef[],
   counts: Record<string, number>,
@@ -65,16 +83,64 @@ function nextCommand(
   const n = rotation.length;
   for (let i = 0; i < n; i++) {
     const cmd = rotation[(fromIdx + i) % n];
-    if (!cmd.enabled) continue;
-    if (
-      cmd.maxPerSession !== null &&
-      (counts[cmd.id] ?? 0) >= cmd.maxPerSession
-    ) {
-      continue;
+    if (isEligible(cmd, counts)) {
+      return { cmd, offset: i };
     }
-    return { cmd, offset: i };
   }
   return null;
+}
+
+/** Indeks eligible, diacak Fisher-Yates (pakai deps.random → test deterministik). */
+function eligibleShuffled(
+  rotation: CommandDef[],
+  counts: Record<string, number>,
+  random: () => number,
+): number[] {
+  const idxs = rotation
+    .map((_, i) => i)
+    .filter((i) => isEligible(rotation[i], counts));
+  for (let i = idxs.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    const tmp = idxs[i];
+    idxs[i] = idxs[j];
+    idxs[j] = tmp;
+  }
+  return idxs;
+}
+
+/**
+ * Ambil berikutnya dari antrean acak; antrean habis → isi ulang shuffle.
+ * Skip cmd yang kehabisan limit/disabled sejak antrean dibuat.
+ */
+function pickShuffled(
+  rotation: CommandDef[],
+  counts: Record<string, number>,
+  queue: number[],
+  random: () => number,
+): Picked | null {
+  for (;;) {
+    while (queue.length > 0) {
+      const i = queue.shift()!;
+      if (isEligible(rotation[i], counts)) {
+        return { cmd: rotation[i], offset: i };
+      }
+    }
+    const fresh = eligibleShuffled(rotation, counts, random);
+    if (fresh.length === 0) return null;
+    queue.push(...fresh);
+  }
+}
+
+/** Peek kandidat berikutnya tanpa mengonsumsi antrean (untuk countdown). */
+function peekShuffled(
+  rotation: CommandDef[],
+  counts: Record<string, number>,
+  queue: number[],
+): Picked | null {
+  const i = queue.find((idx) => isEligible(rotation[idx], counts));
+  if (i !== undefined) return { cmd: rotation[i], offset: i };
+  const first = rotation.find((cmd) => isEligible(cmd, counts));
+  return first ? { cmd: first, offset: 0 } : null;
 }
 
 export class Scheduler {
@@ -245,6 +311,8 @@ export class Scheduler {
       config.startGraceSec * 1000 + Math.round(random() * 8000);
     let failures = 0;
     let idx = 0;
+    // Antrean acak tiap siklus (shuffleOrder) — kosong = belum diisi.
+    let queue: number[] = [];
     // Target waktu kirim berikutnya — cek focus/dump yang makan waktu
     // di depan tidak lagi menumpuk di atas delay (interval tetap akurat).
     let nextSendAt = 0;
@@ -281,15 +349,20 @@ export class Scheduler {
           }
         }
 
-        const picked = nextCommand(config.rotation, counts, idx);
+        const picked = config.shuffleOrder
+          ? pickShuffled(config.rotation, counts, queue, random)
+          : nextCommand(config.rotation, counts, idx);
         if (!picked) {
           logger.info(
             'tidak ada command tersisa (limit habis/disabled) — sesi selesai',
           );
           break;
         }
-        idx = (idx + picked.offset + 1) % config.rotation.length;
+        if (!config.shuffleOrder) {
+          idx = (idx + picked.offset + 1) % config.rotation.length;
+        }
         session.markNext(picked.cmd.id);
+        const text = commandText(picked.cmd);
 
         if (
           config.autoStopOnForegroundLoss &&
@@ -326,21 +399,23 @@ export class Scheduler {
         if (signal.aborted) break;
 
         try {
-          await adapter.sendCommand(picked.cmd.text);
+          await adapter.sendCommand(text);
           counts[picked.cmd.id] = (counts[picked.cmd.id] ?? 0) + 1;
           failures = 0;
           session.markSent(picked.cmd.id);
-          logger.info(`sent: ${picked.cmd.text}`);
+          logger.info(`sent: ${text}`);
         } catch (e) {
           failures += 1;
-          logger.error(`gagal kirim "${picked.cmd.text}" (${failures}/3): ${e}`);
+          logger.error(`gagal kirim "${text}" (${failures}/3): ${e}`);
           if (failures >= 3) {
             session.markError(`3x gagal kirim berturut-turut: ${e}`);
             break;
           }
         }
 
-        const upcoming = nextCommand(config.rotation, counts, idx);
+        const upcoming = config.shuffleOrder
+          ? peekShuffled(config.rotation, counts, queue)
+          : nextCommand(config.rotation, counts, idx);
         nextSendAt =
           now() + computeDelayMs(config.minDelaySec, config.maxDelaySec, random);
         session.markNext(upcoming ? upcoming.cmd.id : null, nextSendAt);

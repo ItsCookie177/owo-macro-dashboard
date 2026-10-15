@@ -6,6 +6,7 @@ import { registerRoutes } from './api/routes.js';
 import { detectAdapter, setAdapter } from './adapters/detect.js';
 import { ConfigStore } from './core/config.js';
 import { Logger } from './core/logger.js';
+import { PresetStore } from './core/presets.js';
 import { Scheduler } from './core/scheduler.js';
 import { Session } from './core/session.js';
 
@@ -17,6 +18,7 @@ const distDir = path.resolve(here, '../../dist');
 const indexHtml = path.join(distDir, 'index.html');
 
 const configStore = new ConfigStore();
+const presets = new PresetStore();
 const logger = new Logger();
 const session = new Session();
 const adapter = await detectAdapter();
@@ -47,7 +49,7 @@ app.use('/api', (req, res, next) => {
   res.status(401).json({ error: 'token wajib untuk akses dari LAN' });
 });
 
-registerRoutes(app, { configStore, session, scheduler, logger, getAdapter: () => adapter });
+registerRoutes(app, { configStore, presets, session, scheduler, logger, getAdapter: () => adapter });
 
 app.use(express.static(distDir));
 

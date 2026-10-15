@@ -1,12 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import { MockAdapter } from '../adapters/mock.js';
-import type { AppConfig } from '../../shared/types.js';
+import type { AppConfig, CommandDef } from '../../shared/types.js';
 import { ConfigStore } from './config.js';
 import { Logger } from './logger.js';
-import { computeDelayMs, Scheduler, sleep } from './scheduler.js';
+import { commandText, computeDelayMs, Scheduler, sleep } from './scheduler.js';
 import { Session } from './session.js';
 
-function testConfig(overrides: Partial<AppConfig> = {}): AppConfig {
+type TestCmd = Omit<CommandDef, 'amount'> & { amount?: number | null };
+
+function testConfig(
+  overrides: Omit<Partial<AppConfig>, 'rotation'> & {
+    rotation?: TestCmd[];
+  } = {},
+): AppConfig {
+  const { rotation, ...rest } = overrides;
+  const base: TestCmd[] = [
+    { id: 'hunt', text: 'owo hunt', enabled: true, maxPerSession: null },
+    { id: 'battle', text: 'owo battle', enabled: true, maxPerSession: null },
+  ];
   return {
     minDelaySec: 22,
     maxDelaySec: 48,
@@ -16,13 +27,11 @@ function testConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     breakMaxSec: 120,
     startGraceSec: 10,
     autoStopOnForegroundLoss: true,
-    rotation: [
-      { id: 'hunt', text: 'owo hunt', enabled: true, maxPerSession: null },
-      { id: 'battle', text: 'owo battle', enabled: true, maxPerSession: null },
-    ],
+    shuffleOrder: false,
+    rotation: (rotation ?? base).map((c) => ({ amount: null, ...c })),
     selectors: { composerId: '' },
     lanToken: 'testtoken',
-    ...overrides,
+    ...rest,
   };
 }
 
@@ -102,6 +111,31 @@ describe('sleep', () => {
     const start = Date.now();
     await p;
     expect(Date.now() - start).toBeLessThan(100);
+  });
+});
+
+describe('commandText', () => {
+  const cmd = (over: Partial<CommandDef> = {}): CommandDef => ({
+    id: 'x',
+    text: 'owo slots',
+    enabled: true,
+    maxPerSession: null,
+    amount: null,
+    ...over,
+  });
+
+  it('tanpa amount = teks apa adanya', () => {
+    expect(commandText(cmd())).toBe('owo slots');
+    expect(commandText(cmd({ text: '  owo hunt  ' }))).toBe('owo hunt');
+  });
+
+  it('amount di-append sebagai nominal koin', () => {
+    expect(commandText(cmd({ text: 'owo slots', amount: 1000 }))).toBe(
+      'owo slots 1000',
+    );
+    expect(
+      commandText(cmd({ text: 'owo coinflip head', amount: 100 })),
+    ).toBe('owo coinflip head 100');
   });
 });
 
@@ -451,5 +485,93 @@ describe('Scheduler', () => {
     const { scheduler } = makeScheduler(testConfig(), adapter);
     await scheduler.stop('normal');
     expect(adapter.cleared).toBe(0);
+  });
+
+  it('cmd uang: amount ikut terkirim ke Discord', async () => {
+    const adapter = new MockAdapter();
+    const config = testConfig({
+      rotation: [
+        {
+          id: 'cf',
+          text: 'owo coinflip head',
+          enabled: true,
+          maxPerSession: 1,
+          amount: 100,
+        },
+        {
+          id: 'slots',
+          text: 'owo slots',
+          enabled: true,
+          maxPerSession: 1,
+          amount: null,
+        },
+      ],
+    });
+    const { scheduler, session } = makeScheduler(config, adapter);
+    await scheduler.start();
+    await waitFor(() => session.status === 'idle');
+    expect(adapter.sent).toEqual(['owo coinflip head 100', 'owo slots']);
+  });
+
+  it('shuffleOrder: urutan acak deterministik + isi ulang tiap siklus', async () => {
+    const adapter = new MockAdapter();
+    const config = testConfig({
+      shuffleOrder: true,
+      rotation: [
+        { id: 'hunt', text: 'owo hunt', enabled: true, maxPerSession: 2 },
+        { id: 'battle', text: 'owo battle', enabled: true, maxPerSession: 2 },
+        { id: 'cf', text: 'owo cf', enabled: true, maxPerSession: 2 },
+      ],
+    });
+    const { scheduler, session } = makeScheduler(config, adapter, {
+      random: () => 0,
+    });
+    await scheduler.start();
+    await waitFor(() => session.status === 'idle');
+    // Fisher-Yates dgn random=0 → [battle, cf, hunt], diulang tiap siklus
+    expect(adapter.sent).toEqual([
+      'owo battle',
+      'owo cf',
+      'owo hunt',
+      'owo battle',
+      'owo cf',
+      'owo hunt',
+    ]);
+  });
+
+  it('shuffleOrder: skip disabled/limit habis di antrean lalu selesai', async () => {
+    const adapter = new MockAdapter();
+    const config = testConfig({
+      shuffleOrder: true,
+      rotation: [
+        { id: 'a', text: 'owo a', enabled: true, maxPerSession: 1 },
+        { id: 'b', text: 'owo b', enabled: false, maxPerSession: null },
+        { id: 'c', text: 'owo c', enabled: true, maxPerSession: 1 },
+      ],
+    });
+    const { scheduler, session } = makeScheduler(config, adapter, {
+      random: () => 0,
+    });
+    await scheduler.start();
+    await waitFor(() => session.status === 'idle');
+    expect(adapter.sent).toEqual(['owo c', 'owo a']);
+    expect(session.snapshot().totalSent).toBe(2);
+  });
+
+  it('shuffleOrder mati = round-robin urut seperti biasa', async () => {
+    const adapter = new MockAdapter();
+    const config = testConfig({
+      shuffleOrder: false,
+      rotation: [
+        { id: 'hunt', text: 'owo hunt', enabled: true, maxPerSession: 1 },
+        { id: 'cf', text: 'owo cf', enabled: true, maxPerSession: 1 },
+      ],
+    });
+    const { scheduler, session } = makeScheduler(config, adapter, {
+      random: () => 0,
+    });
+    await scheduler.start();
+    await waitFor(() => session.status === 'idle');
+    expect(adapter.sent).toEqual(['owo hunt', 'owo cf']);
   });
 });

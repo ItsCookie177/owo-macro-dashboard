@@ -16,6 +16,8 @@ export interface CommandDef {
   text: string;
   enabled: boolean;
   maxPerSession: number | null;
+  /** Jumlah koin untuk cmd uang — null = tanpa nominal (pakai teks apa adanya). */
+  amount: number | null;
 }
 
 export interface Stats {
@@ -50,6 +52,8 @@ export interface AppConfig {
   breakMaxSec: number;
   startGraceSec: number;
   autoStopOnForegroundLoss: boolean;
+  /** Acak urutan pengambilan command tiap siklus. */
+  shuffleOrder: boolean;
   rotation: CommandDef[];
   selectors: { composerId: string };
   lanToken: string;

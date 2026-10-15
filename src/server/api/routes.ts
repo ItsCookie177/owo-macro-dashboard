@@ -11,16 +11,22 @@ import type { AutomationAdapter } from '../adapters/types.js';
 import { parseComposerId } from '../adapters/target.js';
 import type { ConfigStore } from '../core/config.js';
 import type { Logger } from '../core/logger.js';
+import type { PresetStore } from '../core/presets.js';
 import type { Scheduler } from '../core/scheduler.js';
 import type { Session } from '../core/session.js';
 
 export type AppContext = {
   configStore: ConfigStore;
+  presets: PresetStore;
   session: Session;
   scheduler: Scheduler;
   logger: Logger;
   getAdapter: () => AutomationAdapter;
 };
+
+const presetNameSchema = z.object({
+  name: z.string().trim().min(1).max(40),
+});
 
 function zodMsg(err: z.ZodError): string {
   return err.issues
@@ -34,7 +40,7 @@ function publicConfig(config: AppConfig) {
 }
 
 export function registerRoutes(app: Express, ctx: AppContext): void {
-  const { configStore, session, scheduler, logger, getAdapter } = ctx;
+  const { configStore, presets, session, scheduler, logger, getAdapter } = ctx;
   const router = Router();
 
   function statePayload() {
@@ -98,6 +104,43 @@ export function registerRoutes(app: Express, ctx: AppContext): void {
         error: e instanceof Error ? e.message : String(e),
       });
     }
+  });
+
+  router.get('/presets', (_req, res) => {
+    res.json(presets.list());
+  });
+
+  router.post('/presets', (req, res) => {
+    const parsed = presetNameSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      res.status(400).json({ error: zodMsg(parsed.error) });
+      return;
+    }
+    try {
+      const { lanToken: _ignored, ...cfg } = configStore.get();
+      const preset = presets.save(parsed.data.name, cfg);
+      logger.info(`preset disimpan: "${preset.name}"`);
+      res.status(201).json(preset);
+    } catch (e) {
+      res.status(400).json({
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+  });
+
+  router.delete('/presets', (req, res) => {
+    const parsed = presetNameSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      res.status(400).json({ error: zodMsg(parsed.error) });
+      return;
+    }
+    const ok = presets.remove(parsed.data.name);
+    if (!ok) {
+      res.status(404).json({ error: `preset "${parsed.data.name}" tidak ada` });
+      return;
+    }
+    logger.info(`preset dihapus: "${parsed.data.name}"`);
+    res.json({ ok: true });
   });
 
   router.get('/events', (req, res) => {

@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { LogEntry, StateResponse } from '../shared/types';
+import type { LogEntry, PublicConfig, StateResponse } from '../shared/types';
 import type { ConfigInput } from '../shared/schema';
 import Banner from './components/Banner';
 import ControlPanel from './components/ControlPanel';
 import Diagnostik from './components/Diagnostik';
 import LogViewer from './components/LogViewer';
+import PresetsCard from './components/PresetsCard';
 import RotationEditor from './components/RotationEditor';
 import Sidebar, {
   MobileTopbar,
@@ -14,11 +15,15 @@ import Sidebar, {
 import StatsGrid from './components/StatsGrid';
 import StatusCard from './components/StatusCard';
 import {
+  deletePreset,
   eventsUrl,
   getState,
+  getPresets,
   putConfig,
+  savePreset,
   startSession,
   stopSession,
+  type Preset,
 } from './hooks/useApi';
 import { useEventStream } from './hooks/useEventStream';
 import { alarmBeep, softBeep } from './lib/alarm';
@@ -37,6 +42,11 @@ function pageFromHash(hash: string): PageId {
   return PAGE_IDS.includes(id) ? id : 'dashboard';
 }
 
+/** id unik untuk command baru (crypto.randomUUID butuh secure context). */
+function newCommandId(): string {
+  return `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
+}
+
 export default function App() {
   const [state, setState] = useState<StateResponse | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -45,6 +55,7 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [minDelayValue, setMinDelayValue] = useState('22');
   const [maxDelayValue, setMaxDelayValue] = useState('48');
+  const [presets, setPresets] = useState<Preset[]>([]);
   const [page, setPage] = useState<PageId>(() =>
     pageFromHash(window.location.hash),
   );
@@ -80,6 +91,18 @@ export default function App() {
       setMaxDelayValue(String(s.config.maxDelaySec));
     }
   }, []);
+
+  const refreshPresets = useCallback(() => {
+    getPresets().then(setPresets).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    refreshPresets();
+    // State awal langsung diambil — tidak menunggu SSE open.
+    getState()
+      .then(onState)
+      .catch(() => {});
+  }, [refreshPresets, onState]);
 
   const onLog = useCallback((entry: LogEntry) => {
     setLogs((prev) => {
@@ -137,18 +160,79 @@ export default function App() {
     }
   }
 
-  async function handleToggle(id: string) {
+  /** Patch config (rotation/shuffle/dll) → PUT sekali, state lokal ikut. */
+  async function patchConfig(patch: Partial<PublicConfig>): Promise<void> {
     if (!state) return;
     setActionError(null);
+    try {
+      await putConfig({ ...state.config, ...patch });
+      setState((prev) =>
+        prev ? { ...prev, config: { ...prev.config, ...patch } } : prev,
+      );
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  function handleToggle(id: string) {
+    if (!state) return;
     const rotation = state.config.rotation.map((c) =>
       c.id === id ? { ...c, enabled: !c.enabled } : c,
     );
-    const payload: ConfigInput = { ...state.config, rotation };
+    return patchConfig({ rotation });
+  }
+
+  function handleShuffleToggle(value: boolean) {
+    return patchConfig({ shuffleOrder: value });
+  }
+
+  function handleAmountChange(id: string, amount: number | null) {
+    if (!state) return;
+    const rotation = state.config.rotation.map((c) =>
+      c.id === id ? { ...c, amount } : c,
+    );
+    return patchConfig({ rotation });
+  }
+
+  function handleDelete(id: string) {
+    if (!state || state.config.rotation.length <= 1) return;
+    return patchConfig({ rotation: state.config.rotation.filter((c) => c.id !== id) });
+  }
+
+  function handleAdd(text: string, amount: number | null) {
+    if (!state) return;
+    const rotation = [
+      ...state.config.rotation,
+      { id: newCommandId(), text, enabled: true, maxPerSession: null, amount },
+    ];
+    return patchConfig({ rotation });
+  }
+
+  async function handleSavePreset(name: string) {
     try {
-      await putConfig(payload);
-      setState((prev) =>
-        prev ? { ...prev, config: { ...prev.config, rotation } } : prev,
-      );
+      await savePreset(name);
+      refreshPresets();
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  async function handleLoadPreset(preset: Preset) {
+    setActionError(null);
+    try {
+      const updated = await putConfig(preset.config);
+      setState((prev) => (prev ? { ...prev, config: updated } : prev));
+      setMinDelayValue(String(updated.minDelaySec));
+      setMaxDelayValue(String(updated.maxDelaySec));
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  async function handleDeletePreset(name: string) {
+    try {
+      await deletePreset(name);
+      refreshPresets();
     } catch (e) {
       setActionError(e instanceof Error ? e.message : String(e));
     }
@@ -221,11 +305,25 @@ export default function App() {
                 </>
               )}
               {page === 'rotasi' && (
-                <RotationEditor
-                  rotation={state.config.rotation}
-                  disabled={running}
-                  onToggle={(id) => void handleToggle(id)}
-                />
+                <>
+                  <PresetsCard
+                    presets={presets}
+                    disabled={running}
+                    onSave={handleSavePreset}
+                    onLoad={handleLoadPreset}
+                    onDelete={handleDeletePreset}
+                  />
+                  <RotationEditor
+                    rotation={state.config.rotation}
+                    disabled={running}
+                    shuffleOrder={state.config.shuffleOrder}
+                    onToggle={(id) => void handleToggle(id)}
+                    onShuffleToggle={(v) => void handleShuffleToggle(v)}
+                    onAmountChange={(id, a) => void handleAmountChange(id, a)}
+                    onDelete={(id) => void handleDelete(id)}
+                    onAdd={(text, amount) => void handleAdd(text, amount)}
+                  />
+                </>
               )}
               {page === 'statistik' && <StatsGrid stats={state.stats} />}
               {page === 'log' && <LogViewer logs={logs} />}

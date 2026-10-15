@@ -5,6 +5,8 @@ export const commandDefSchema = z.object({
   text: z.string().min(1),
   enabled: z.boolean(),
   maxPerSession: z.number().int().positive().nullable(),
+  /** Jumlah koin untuk cmd uang (owo slots/cf/…) — di-append ke text saat kirim. */
+  amount: z.number().int().min(1).max(10_000_000_000).nullable().default(null),
 });
 
 export const configSchema = z
@@ -17,6 +19,8 @@ export const configSchema = z
     breakMaxSec: z.number().int().min(5).max(600).default(120),
     startGraceSec: z.number().int().min(5).max(120).default(10),
     autoStopOnForegroundLoss: z.boolean().default(true),
+    /** Acak urutan pengambilan command tiap siklus. */
+    shuffleOrder: z.boolean().default(false),
     rotation: z.array(commandDefSchema).min(1),
     selectors: z.object({ composerId: z.string() }),
   })
