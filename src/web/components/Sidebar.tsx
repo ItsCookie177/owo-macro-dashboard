@@ -1,4 +1,4 @@
-import { BarChart3, Gauge, Radar, ScrollText, Shuffle } from 'lucide-react';
+import { BarChart3, Gauge, Menu, Radar, ScrollText, Shuffle, X } from 'lucide-react';
 
 export type PageId =
   | 'dashboard'
@@ -15,13 +15,17 @@ const NAV: { id: PageId; label: string; icon: typeof Gauge }[] = [
   { id: 'diagnostik', label: 'Diagnostik', icon: Radar },
 ];
 
-function Logo() {
+function Logo({ compact = false }: { compact?: boolean }) {
   return (
-    <div className="flex items-center gap-3">
-      <span className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-accent text-white">
+    <div className={`flex items-center ${compact ? 'gap-2' : 'gap-3'}`}>
+      <span
+        className={`flex items-center justify-center rounded-[10px] bg-accent text-white ${
+          compact ? 'h-8 w-8' : 'h-10 w-10'
+        }`}
+      >
         <svg
           viewBox="0 0 256 256"
-          className="h-[26px] w-[26px]"
+          className={compact ? 'h-[20px] w-[20px]' : 'h-[26px] w-[26px]'}
           fill="none"
           aria-hidden="true"
         >
@@ -41,7 +45,9 @@ function Logo() {
         <p className="text-[0.95rem] leading-tight font-extrabold text-ink">
           OwO Macro
         </p>
-        <p className="font-mono text-[0.7rem] text-ink-3">v0.4.0</p>
+        {!compact && (
+          <p className="font-mono text-[0.7rem] text-ink-3">v0.4.0</p>
+        )}
       </div>
     </div>
   );
@@ -52,10 +58,29 @@ type Props = {
   onNavigate: (id: PageId) => void;
 };
 
-export default function Sidebar({ page, onNavigate }: Props) {
+type SidebarProps = Props & {
+  open: boolean;
+  onClose: () => void;
+};
+
+export default function Sidebar({ page, onNavigate, open, onClose }: SidebarProps) {
   return (
-    <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-line bg-surface px-4 py-6 lg:flex">
-      <Logo />
+    <aside
+      className={`fixed inset-y-0 left-0 z-50 flex w-64 -translate-x-full flex-col border-r border-line bg-surface px-4 py-6 transition-transform duration-200 ease-out lg:z-30 lg:translate-x-0 ${
+        open ? 'translate-x-0' : ''
+      }`}
+    >
+      <div className="flex items-start justify-between">
+        <Logo />
+        <button
+          type="button"
+          className="btn btn-ghost -mt-1 !px-2 !py-1.5 lg:hidden"
+          aria-label="Tutup menu"
+          onClick={onClose}
+        >
+          <X size={18} />
+        </button>
+      </div>
       <nav className="mt-8 space-y-1">
         {NAV.map(({ id, label, icon: Icon }) => (
           <button
@@ -77,28 +102,35 @@ export default function Sidebar({ page, onNavigate }: Props) {
   );
 }
 
-export function MobileTopbar({ page, onNavigate }: Props) {
+export function MobileTopbar({
+  page,
+  onMenu,
+  menuOpen,
+}: {
+  page: PageId;
+  onMenu: () => void;
+  menuOpen: boolean;
+}) {
+  const meta = PAGE_META[page];
   return (
     <div className="sticky top-0 z-30 border-b border-line bg-base/75 backdrop-blur-[4px] lg:hidden">
-      <div className="flex items-center justify-between px-4 py-3">
-        <Logo />
+      <div className="flex items-center gap-3 px-4 py-3">
+        <button
+          type="button"
+          className="btn btn-ghost !px-2.5 !py-2"
+          aria-label="Buka menu navigasi"
+          aria-expanded={menuOpen}
+          onClick={onMenu}
+        >
+          <Menu size={18} />
+        </button>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-extrabold text-ink">
+            {meta.title}
+          </p>
+        </div>
+        <Logo compact />
       </div>
-      <nav className="flex gap-1.5 overflow-x-auto px-4 pb-2.5">
-        {NAV.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => onNavigate(id)}
-            aria-current={page === id ? 'page' : undefined}
-            className={`chip flex-none cursor-pointer ${
-              page === id ? 'chip-accent' : ''
-            }`}
-          >
-            <Icon size={13} />
-            {label}
-          </button>
-        ))}
-      </nav>
     </div>
   );
 }

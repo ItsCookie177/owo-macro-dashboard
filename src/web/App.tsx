@@ -82,7 +82,18 @@ export default function App() {
   const [page, setPage] = useState<PageId>(() =>
     pageFromHash(window.location.hash),
   );
+  const [menuOpen, setMenuOpen] = useState(false);
   const initialized = useRef(false);
+
+  // Escape menutup drawer menu (mobile).
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setMenuOpen(false);
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [menuOpen]);
 
   // Sinkronkan halaman dengan hash URL (back/forward browser ikut jalan).
   useEffect(() => {
@@ -97,6 +108,7 @@ export default function App() {
   }, []);
 
   function handleNavigate(id: PageId) {
+    setMenuOpen(false);
     if (id === page) {
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
@@ -324,8 +336,25 @@ export default function App() {
 
   return (
     <div className="min-h-screen font-sans">
-      <Sidebar page={page} onNavigate={handleNavigate} />
-      <MobileTopbar page={page} onNavigate={handleNavigate} />
+      <Sidebar
+        page={page}
+        onNavigate={handleNavigate}
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+      />
+      {menuOpen && (
+        <button
+          type="button"
+          aria-label="Tutup menu navigasi"
+          className="fixed inset-0 z-40 bg-ink/40 lg:hidden"
+          onClick={() => setMenuOpen(false)}
+        />
+      )}
+      <MobileTopbar
+        page={page}
+        onMenu={() => setMenuOpen(true)}
+        menuOpen={menuOpen}
+      />
 
       <div className="lg:pl-64">
         <header className="sticky top-0 z-20 border-b border-line bg-base/75 px-4 pt-5 pb-3 backdrop-blur-[4px] lg:px-8 lg:pt-6">
