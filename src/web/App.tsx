@@ -359,6 +359,7 @@ export default function App() {
                   <StatusCard
                     stats={state.stats}
                     maxDelaySec={state.config.maxDelaySec}
+                    rotation={state.config.rotation}
                   />
                   <ControlPanel
                     minDelayValue={minDelayValue}

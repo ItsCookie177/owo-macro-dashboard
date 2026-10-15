@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AlertTriangle, ShieldAlert } from 'lucide-react';
-import type { Stats } from '../../shared/types';
+import type { CommandDef, Stats } from '../../shared/types';
 import { captchaRemainingMs, formatMMSS } from '../lib/captcha';
 
 const STATUS_LABEL: Record<Stats['status'], string> = {
@@ -20,11 +20,21 @@ function formatDuration(ms: number): string {
 type Props = {
   stats: Stats;
   maxDelaySec: number;
+  rotation: CommandDef[];
 };
 
-export default function StatusCard({ stats, maxDelaySec }: Props) {
+export default function StatusCard({ stats, maxDelaySec, rotation }: Props) {
   const status = stats.status;
   const [now, setNow] = useState(() => Date.now());
+
+  const nextCmd = stats.nextCommandId
+    ? rotation.find((c) => c.id === stats.nextCommandId)
+    : undefined;
+  const nextLabel = nextCmd
+    ? nextCmd.amount === null
+      ? nextCmd.text
+      : `${nextCmd.text} ${nextCmd.amount}`
+    : (stats.nextCommandId ?? '—');
 
   useEffect(() => {
     if (status !== 'running' && status !== 'captcha') return;
@@ -105,7 +115,7 @@ export default function StatusCard({ stats, maxDelaySec }: Props) {
           </p>
           <div className="mt-1 flex flex-wrap items-baseline gap-x-4 gap-y-1">
             <span className="font-mono text-3xl font-semibold text-ink sm:text-[2.1rem]">
-              {status === 'running' ? (stats.nextCommandId ?? '—') : '—'}
+              {status === 'running' ? nextLabel : '—'}
             </span>
             {status === 'running' && (
               <CountdownBadge stats={stats} maxDelaySec={maxDelaySec} now={now} />
