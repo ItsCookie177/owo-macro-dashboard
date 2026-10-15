@@ -32,6 +32,7 @@ function makeScheduler(
   extra: {
     sleepFn?: (ms: number, signal: AbortSignal) => Promise<void>;
     random?: () => number;
+    captchaCheckMs?: number;
   } = {},
 ) {
   const session = new Session();
@@ -51,6 +52,7 @@ function makeScheduler(
     },
     firstDelayMs: 0,
     random: extra.random,
+    captchaCheckMs: extra.captchaCheckMs,
   });
   return { scheduler, session, logger, sleeps };
 }
@@ -255,19 +257,46 @@ describe('Scheduler', () => {
     expect(session.snapshot().nextAt).toBeNull();
   });
 
-  it('verifikasi human di layar -> auto-stop + error', async () => {
+  it('verifikasi human di layar -> latch captcha + auto-stop', async () => {
     const adapter = new MockAdapter();
     adapter.screenText =
       'Hey @kamu please complete human verification at owobot.com/captcha';
     const config = testConfig();
     const { scheduler, session, logger } = makeScheduler(config, adapter);
     await scheduler.start();
-    await waitFor(() => session.status === 'error');
+    await waitFor(() => session.status === 'captcha');
     expect(adapter.sent).toEqual([]);
     expect(session.snapshot().lastError).toMatch(/verifikasi human/);
+    expect(session.snapshot().captchaAt).not.toBeNull();
     expect(
       logger.recent().some((l) => l.level === 'error' && /VERIFIKASI/.test(l.msg)),
     ).toBe(true);
+  });
+
+  it('start ditolak selama verifikasi masih di layar', async () => {
+    const adapter = new MockAdapter();
+    adapter.screenText = 'please verify at owobot.com/captcha';
+    const config = testConfig();
+    const { scheduler, session } = makeScheduler(config, adapter);
+    await scheduler.start();
+    await waitFor(() => session.status === 'captcha');
+    await expect(scheduler.start()).rejects.toThrow(/verifikasi human masih/);
+    expect(session.status).toBe('captcha');
+  });
+
+  it('verifikasi selesai -> watcher buka kunci otomatis', async () => {
+    const adapter = new MockAdapter();
+    adapter.screenText = 'verify yourself at owobot.com/captcha now';
+    const config = testConfig();
+    const { scheduler, session } = makeScheduler(config, adapter, {
+      captchaCheckMs: 15,
+    });
+    await scheduler.start();
+    await waitFor(() => session.status === 'captcha');
+    adapter.screenText = 'owo hunt\now battle';
+    await waitFor(() => session.status === 'idle');
+    expect(session.snapshot().captchaAt).toBeNull();
+    expect(session.snapshot().lastError).toBeNull();
   });
 
   it('dumpUi gagal bukan alasan stop', async () => {

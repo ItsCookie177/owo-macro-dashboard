@@ -1,4 +1,7 @@
-export type Status = 'idle' | 'running' | 'error';
+export type Status = 'idle' | 'running' | 'error' | 'captcha';
+
+/** Jendela waktu menyelesaikan verifikasi human sebelum risiko ban (~10 menit). */
+export const CAPTCHA_WINDOW_MS = 10 * 60 * 1000;
 
 export type LogLevel = 'info' | 'warn' | 'error';
 
@@ -25,6 +28,8 @@ export interface Stats {
   /** Target waktu kirim berikutnya (ISO, clock server) — untuk countdown akurat. */
   nextAt: string | null;
   lastError: string | null;
+  /** Waktu verifikasi human terdeteksi (ISO) — dasar countdown 10 menit. */
+  captchaAt: string | null;
 }
 
 export type PublicConfig = Omit<AppConfig, 'lanToken'>;

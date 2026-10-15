@@ -21,6 +21,7 @@ import {
   stopSession,
 } from './hooks/useApi';
 import { useEventStream } from './hooks/useEventStream';
+import { alarmBeep, softBeep } from './lib/alarm';
 
 const MAX_LOGS = 500;
 const PAGE_IDS: PageId[] = [
@@ -155,6 +156,17 @@ export default function App() {
 
   const running = state?.status === 'running';
   const meta = PAGE_META[page];
+  const captchaAt =
+    state?.stats.status === 'captcha' ? state.stats.captchaAt : null;
+
+  // Alarm keras saat verifikasi terdeteksi / dilepas (bunyi + getar HP).
+  const prevCaptcha = useRef(false);
+  useEffect(() => {
+    const active = captchaAt !== null;
+    if (active && !prevCaptcha.current) alarmBeep();
+    if (!active && prevCaptcha.current) softBeep();
+    prevCaptcha.current = active;
+  }, [captchaAt]);
 
   return (
     <div className="min-h-screen font-sans">
@@ -185,7 +197,7 @@ export default function App() {
         </header>
 
         <main className="mx-auto max-w-2xl space-y-4 px-4 pt-4 pb-10 lg:max-w-3xl lg:px-8">
-          <Banner message={actionError} sseDown={!connected} />
+          <Banner message={actionError} sseDown={!connected} captchaAt={captchaAt} />
           {state ? (
             <>
               {page === 'dashboard' && (
@@ -201,6 +213,7 @@ export default function App() {
                     onMaxDelayChange={setMaxDelayValue}
                     running={running}
                     busy={busy}
+                    captchaActive={captchaAt !== null}
                     onStart={() => void handleStart()}
                     onStop={() => void handleStop('normal')}
                     onEmergency={() => void handleStop('emergency')}

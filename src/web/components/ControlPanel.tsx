@@ -38,6 +38,7 @@ type Props = {
   onMaxDelayChange: (v: string) => void;
   running: boolean;
   busy: boolean;
+  captchaActive: boolean;
   onStart: () => void;
   onStop: () => void;
   onEmergency: () => void;
@@ -50,6 +51,7 @@ export default function ControlPanel({
   onMaxDelayChange,
   running,
   busy,
+  captchaActive,
   onStart,
   onStop,
   onEmergency,
@@ -107,7 +109,7 @@ export default function ControlPanel({
         <button
           type="button"
           onClick={onStart}
-          disabled={running || busy || !validation.ok}
+          disabled={running || busy || captchaActive || !validation.ok}
           className="btn btn-primary"
         >
           <Play size={16} /> {busy ? 'Memulai…' : 'Start'}
@@ -130,9 +132,16 @@ export default function ControlPanel({
         </button>
       </div>
 
-      <p className="mt-3 text-xs text-ink-3">
-        Setelah Start, pindah fokus ke Discord dalam 10–18 detik.
-      </p>
+      {captchaActive ? (
+        <p className="mt-3 text-xs font-medium text-danger-ink">
+          Verifikasi human aktif — selesaikan di owobot.com/captcha dulu.
+          Kunci terbuka otomatis setelah verifikasi hilang dari layar.
+        </p>
+      ) : (
+        <p className="mt-3 text-xs text-ink-3">
+          Setelah Start, pindah fokus ke Discord dalam 10–18 detik.
+        </p>
+      )}
     </section>
   );
 }

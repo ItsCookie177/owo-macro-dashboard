@@ -11,6 +11,7 @@ function idleStats(): Stats {
     nextCommandId: null,
     nextAt: null,
     lastError: null,
+    captchaAt: null,
   };
 }
 
@@ -31,6 +32,7 @@ export class Session extends EventEmitter {
       nextCommandId: null,
       nextAt: null,
       lastError: null,
+      captchaAt: null,
     };
     this.emit('update');
   }
@@ -56,11 +58,29 @@ export class Session extends EventEmitter {
     this.emit('update');
   }
 
+  /** Status khusus: verifikasi human terdeteksi — sesi berhenti, jendela 10 menit dimulai. */
+  markCaptcha(msg: string): void {
+    this.stats.status = 'captcha';
+    this.stats.lastError = msg;
+    this.stats.captchaAt = new Date().toISOString();
+    this.emit('update');
+  }
+
+  /** Verifikasi hilang dari layar — kunci dilepas, sesi siap diulang. */
+  clearCaptcha(): void {
+    if (this.stats.status !== 'captcha') return;
+    this.stats.status = 'idle';
+    this.stats.lastError = null;
+    this.stats.captchaAt = null;
+    this.emit('update');
+  }
+
   end(status: Status = 'idle'): void {
     this.stats.status = status;
     this.stats.nextCommandId = null;
     this.stats.nextAt = null;
     this.stats.lastSentAt = null;
+    if (status !== 'captcha') this.stats.captchaAt = null;
     this.emit('update');
   }
 

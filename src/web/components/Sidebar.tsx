@@ -41,7 +41,7 @@ function Logo() {
         <p className="text-[0.95rem] leading-tight font-extrabold text-ink">
           OwO Macro
         </p>
-        <p className="font-mono text-[0.7rem] text-ink-3">v0.2.0</p>
+        <p className="font-mono text-[0.7rem] text-ink-3">v0.3.0</p>
       </div>
     </div>
   );

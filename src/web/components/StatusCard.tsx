@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, ShieldAlert } from 'lucide-react';
 import type { Stats } from '../../shared/types';
+import { captchaRemainingMs, formatMMSS } from '../lib/captcha';
 
 const STATUS_LABEL: Record<Stats['status'], string> = {
   idle: 'IDLE',
   running: 'BERJALAN',
   error: 'ERROR',
+  captcha: 'VERIFIKASI',
 };
 
 function formatDuration(ms: number): string {
@@ -25,7 +27,7 @@ export default function StatusCard({ stats, maxDelaySec }: Props) {
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
-    if (status !== 'running') return;
+    if (status !== 'running' && status !== 'captcha') return;
     const t = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(t);
   }, [status]);
@@ -33,16 +35,20 @@ export default function StatusCard({ stats, maxDelaySec }: Props) {
   const dotClass =
     status === 'running'
       ? 'bg-live dot-live'
-      : status === 'error'
-        ? 'bg-accent'
-        : 'bg-ink-3';
+      : status === 'captcha'
+        ? 'bg-danger-ink dot-live'
+        : status === 'error'
+          ? 'bg-accent'
+          : 'bg-ink-3';
 
   const pillClass =
     status === 'running'
       ? 'bg-accent-soft text-accent-ink'
-      : status === 'error'
+      : status === 'captcha'
         ? 'bg-danger-soft text-danger-ink'
-        : 'bg-base text-ink-2';
+        : status === 'error'
+          ? 'bg-danger-soft text-danger-ink'
+          : 'bg-base text-ink-2';
 
   return (
     <section id="sesi" className="card scroll-mt-24">
@@ -60,7 +66,34 @@ export default function StatusCard({ stats, maxDelaySec }: Props) {
         )}
       </div>
 
-      {status === 'error' && stats.lastError ? (
+      {status === 'captcha' && stats.captchaAt ? (
+        <div className="mt-4">
+          <p className="text-[0.7rem] font-bold tracking-[0.14em] text-danger-ink uppercase">
+            <ShieldAlert size={11} className="mr-1 inline align-[-1px]" />
+            Verifikasi human — sisa waktu
+          </p>
+          <div className="mt-1 flex flex-wrap items-baseline gap-x-4 gap-y-1">
+            <span className="font-mono text-4xl font-semibold text-danger-ink tabular-nums">
+              {formatMMSS(captchaRemainingMs(stats.captchaAt, now))}
+            </span>
+            <span className="text-sm text-ink-2">
+              selesaikan manual sekarang
+            </span>
+            <a
+              href="https://owobot.com/captcha"
+              target="_blank"
+              rel="noreferrer"
+              className="chip chip-accent cursor-pointer"
+            >
+              owobot.com/captcha ↗
+            </a>
+          </div>
+          <p className="mt-3 text-xs text-ink-3">
+            Sesi terkunci otomatis. Setelah verifikasi selesai, kunci terbuka
+            sendiri dan kamu tinggal tekan Start.
+          </p>
+        </div>
+      ) : status === 'error' && stats.lastError ? (
         <div className="mt-4 flex items-start gap-2.5 rounded-[10px] border border-danger-line bg-danger-soft px-3.5 py-3 text-sm text-danger-ink">
           <AlertTriangle size={18} className="mt-0.5 flex-none" />
           <span>{stats.lastError}</span>

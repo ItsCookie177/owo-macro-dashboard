@@ -1,8 +1,10 @@
 import type { AppConfig, CommandDef } from '../../shared/types.js';
+import { CAPTCHA_WINDOW_MS } from '../../shared/types.js';
 import type { AutomationAdapter } from '../adapters/types.js';
 import { looksLikeVerification } from './captcha.js';
 import type { ConfigStore } from './config.js';
 import type { Logger } from './logger.js';
+import { bestEffortNotify } from './notify.js';
 import type { Session } from './session.js';
 
 export type SchedulerDeps = {
@@ -15,6 +17,8 @@ export type SchedulerDeps = {
   random?: () => number;
   /** Timpa durasi grace stagger (untuk test). */
   firstDelayMs?: number;
+  /** Interval cek ulang verifikasi saat sesi terkunci (untuk test; default 20 dtk). */
+  captchaCheckMs?: number;
 };
 
 export type DelayOverride = {
@@ -76,6 +80,8 @@ function nextCommand(
 export class Scheduler {
   private abort: AbortController | null = null;
   private loopPromise: Promise<void> | null = null;
+  private captchaTimer: ReturnType<typeof setInterval> | null = null;
+  private captchaExpiredNotified = false;
 
   constructor(private readonly deps: SchedulerDeps) {}
 
@@ -83,10 +89,83 @@ export class Scheduler {
     return this.deps.session.status === 'running';
   }
 
+  /** Verifikasi masih ada di layar? Dump gagal / tak ada dump = tidak bisa membuktikan → false. */
+  private async captchaStillPresent(): Promise<boolean> {
+    const { adapter } = this.deps;
+    if (!adapter.dumpUi) return false;
+    try {
+      return looksLikeVerification(await adapter.dumpUi());
+    } catch {
+      return false;
+    }
+  }
+
+  private startCaptchaWatch(): void {
+    if (this.captchaTimer) return;
+    const interval = this.deps.captchaCheckMs ?? 20_000;
+    this.captchaTimer = setInterval(() => {
+      void this.captchaWatchTick();
+    }, interval);
+    this.captchaTimer.unref?.();
+  }
+
+  private stopCaptchaWatch(): void {
+    if (this.captchaTimer) {
+      clearInterval(this.captchaTimer);
+      this.captchaTimer = null;
+    }
+    this.captchaExpiredNotified = false;
+  }
+
+  private async captchaWatchTick(): Promise<void> {
+    const { session, logger } = this.deps;
+    if (session.status !== 'captcha') {
+      this.stopCaptchaWatch();
+      return;
+    }
+    const at = session.snapshot().captchaAt;
+    if (
+      at &&
+      !this.captchaExpiredNotified &&
+      Date.now() - Date.parse(at) > CAPTCHA_WINDOW_MS
+    ) {
+      this.captchaExpiredNotified = true;
+      logger.error(
+        'jendela verifikasi 10 menit habis — pantau akun (risiko ban)',
+      );
+      bestEffortNotify(
+        'OwO Macro: waktu verifikasi habis',
+        'Jendela 10 menit habis — pantau akunmu di owobot.com',
+      );
+    }
+    if (!(await this.captchaStillPresent())) {
+      session.clearCaptcha();
+      this.stopCaptchaWatch();
+      logger.info(
+        'verifikasi human selesai — kunci dilepas, tekan Start untuk lanjut',
+      );
+      bestEffortNotify(
+        'OwO Macro: verifikasi selesai',
+        'Kunci dilepas — tekan Start untuk lanjut sesi',
+      );
+    }
+  }
+
   async start(delayOverride?: DelayOverride): Promise<void> {
     const { adapter, configStore, session, logger } = this.deps;
     if (session.status === 'running') {
       throw new Error('sesi sedang berjalan');
+    }
+    if (session.status === 'captcha') {
+      if (await this.captchaStillPresent()) {
+        throw new Error(
+          'verifikasi human masih di layar — selesaikan dulu di owobot.com/captcha',
+        );
+      }
+      // Dump gagal/tak ada: tidak bisa buktikan masih ada → izinkan;
+      // deteksi per-tick tetap jaga sebelum kirim pertama.
+      session.clearCaptcha();
+      this.stopCaptchaWatch();
     }
     if (!(await adapter.isAvailable())) {
       throw new Error('adapter UI automation tidak tersedia');
@@ -113,6 +192,7 @@ export class Scheduler {
     }
 
     this.abort = new AbortController();
+    this.stopCaptchaWatch();
     session.begin(new Date());
     // Layar tetap nyala selama sesi (timeout disimpan, dipulihkan di akhir).
     try {
@@ -184,9 +264,16 @@ export class Scheduler {
             const screenText = await adapter.dumpUi();
             if (looksLikeVerification(screenText)) {
               logger.error(
-                'VERIFIKASI HUMAN terdeteksi di layar — auto-stop. Selesaikan manual: owobot.com/captcha',
+                'VERIFIKASI HUMAN terdeteksi di layar — auto-stop. Selesaikan manual dalam 10 menit: owobot.com/captcha',
               );
-              session.markError('verifikasi human terdeteksi — auto-stop');
+              session.markCaptcha(
+                'verifikasi human terdeteksi — auto-stop, selesaikan dalam 10 menit',
+              );
+              bestEffortNotify(
+                'OwO Macro: VERIFIKASI HUMAN',
+                'Sisa waktu 10 menit — sekarang di owobot.com/captcha',
+              );
+              this.startCaptchaWatch();
               break;
             }
           } catch {
